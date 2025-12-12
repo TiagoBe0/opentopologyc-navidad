@@ -16,8 +16,10 @@ from config.extractor_config import ExtractorConfig
 
 class SurfaceExtractor:
     """
-    Filtra la superficie y normaliza coordenadas (centrado + PCA).
-    Exporta un .dump final completamente normalizado.
+    Filtra la superficie de la partícula y normaliza coordenadas:
+      1. Centrado en el origen
+      2. Rotación PCA (alinear ejes principales)
+    Exporta un archivo .dump ya normalizado.
     """
 
     def __init__(self, config: ExtractorConfig):
@@ -27,12 +29,12 @@ class SurfaceExtractor:
         self.surface_distance_value = config.surface_distance_value
 
     # ----------------------------------------------------------
-    # METODO PRINCIPAL
+    # MÉTODO PRINCIPAL
     # ----------------------------------------------------------
     def extract(self, dump_file_path: str):
         dump_file_path = Path(dump_file_path)
 
-        # Archivo final normalizado
+        # Archivo de salida
         output_path = dump_file_path.with_name(
             dump_file_path.stem + "_surface_normalized.dump"
         )
@@ -41,9 +43,10 @@ class SurfaceExtractor:
         pipeline = import_file(str(dump_file_path))
 
         # ------------------------------------------------------
-        # 2) MODIFICADORES DE FILTRADO DE SUPERFICIE
+        # 2) FILTRADO DE SUPERFICIE
         # ------------------------------------------------------
         if not self.use_surface_distance:
+            # Método: seleccionar partículas de superficie según el radio
             pipeline.modifiers.append(
                 ConstructSurfaceModifier(
                     radius=self.probe_radius,
@@ -55,6 +58,7 @@ class SurfaceExtractor:
             pipeline.modifiers.append(DeleteSelectedModifier())
 
         else:
+            # Método: seleccionar por distancia a la superficie
             pipeline.modifiers.append(
                 ConstructSurfaceModifier(
                     radius=self.probe_radius,
@@ -64,55 +68,20 @@ class SurfaceExtractor:
             )
             pipeline.modifiers.append(
                 ExpressionSelectionModifier(
-                    expression=f"SurfaceDistance < { self.surface_distance_value}"
+                    expression=f"SurfaceDistance < {self.surface_distance_value}"
                 )
             )
             pipeline.modifiers.append(InvertSelectionModifier())
             pipeline.modifiers.append(DeleteSelectedModifier())
 
-        # Ejecutar filtrado
         data = pipeline.compute()
 
-        # ------------------------------------------------------
-        # 3) EXTRAER POSICIONES PARA NORMALIZAR
-        # ------------------------------------------------------
-        pos = data.particles.positions.numpy().copy()
-
-        # 3.1 Centrado
-        centroid = pos.mean(axis=0)
-        pos_centered = pos - centroid
-
-        # 3.2 PCA (alinear ejes)
-        pca = PCA(n_components=3)
-        pos_pca = pca.fit_transform(pos_centered)
-
-        # matriz de rotación PCA (para aplicar a OVITO)
-        R = pca.components_
-
-        # ------------------------------------------------------
-        # 4) APLICAR TRANSFORMACION A OVITO
-        # ------------------------------------------------------
-        # Centrar primero (traslación)
-        T = np.eye(4)
-        T[:3, 3] = -centroid
-        pipeline.modifiers.append(AffineTransformationModifier(transformation=T))
-
-        # Luego rotación PCA
-        Trot = np.eye(4)
-        Trot[:3, :3] = R
-        pipeline.modifiers.append(AffineTransformationModifier(transformation=Trot))
-
-        # Recalcular datos con las transformaciones aplicadas
-        pipeline.compute()
-
-        # ------------------------------------------------------
-        # 5) EXPORTAR RESULTADO FINAL NORMALIZADO
-        # ------------------------------------------------------
+      
         export_file(
             pipeline,
             str(output_path),
             "lammps/dump",
             columns=["Position.X", "Position.Y", "Position.Z"]
         )
-
+        pipeline.clear()
         return str(output_path)

@@ -20,7 +20,9 @@ class ExtractorConfig:
     probe_radius: float = 2.0           # radio de sonda para alpha shape
     surface_distance:bool = False                                    # para entrenamiento con mas particulas del clustering
     surface_distance_value:float = 2.0                                # valor de distancia de superficie para filtrar particulas(solo si surface_distance=True)
-
+    total_atoms:int =16384
+    a0: float = 3.532
+    lattice_type: str = "fcc"            # tipo de celda unidad (fcc, bcc, hcp, diamond, sc)
     compute_grid_features: bool = True
     compute_hull_features: bool = True
     compute_inertia_features: bool = True

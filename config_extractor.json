@@ -3,10 +3,13 @@
     "probe_radius": 2.0,
     "surface_distance": false,
     "surface_distance_value": 4.0,
-    "compute_grid_features": true,
-    "compute_hull_features": true,
-    "compute_inertia_features": true,
-    "compute_radial_features": true,
-    "compute_entropy_features": true,
-    "compute_clustering_features": true
+    "total_atoms": 16384,
+    "a0": 3.532,
+    "lattice_type": "fcc",
+    "compute_grid_features": false,
+    "compute_hull_features": false,
+    "compute_inertia_features": false,
+    "compute_radial_features": false,
+    "compute_entropy_features": false,
+    "compute_clustering_features": false
 }

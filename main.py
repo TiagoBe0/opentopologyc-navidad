@@ -1,7 +1,6 @@
 from config.extractor_config import ExtractorConfig 
 
 from gui.gui_extractor import ExtractorGUI
-from gui.gui_extractor import ExtractorGUI
 from core.pipeline import ExtractorPipeline
 from config.extractor_config import ExtractorConfig
 

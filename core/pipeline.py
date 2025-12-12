@@ -6,7 +6,6 @@ from tqdm import tqdm
 import numpy as np
 from core.loader import DumpLoader
 from core.surface_extractor import SurfaceExtractor
-from core.normalizer import PositionNormalizer
 from config.extractor_config import ExtractorConfig
 
 
@@ -23,7 +22,6 @@ class ExtractorPipeline:
         self.loader = DumpLoader()
         self.surface = SurfaceExtractor(self.cfg)
 
-        self.normalizer = PositionNormalizer()
 
 
     # --------------------------------------------------------------
@@ -31,26 +29,25 @@ class ExtractorPipeline:
     # --------------------------------------------------------------
     def process_single(self, file_path):
         try:
-            # 1. Carga del dump filtrado
-            raw = self.loader.load(file_path)
-            positions = raw["positions"]
+            filtered = self.surface.extract(file_path)
+            raw = self.loader.load(filtered)
 
-            # 2. Extrae superficie -> devuelve nuevo dump con superficie filtrada
-            filtered_dump = self.surface.extract(file_path)
+            pos = raw["positions"]
 
-            # 3. Cargar el dump filtrado
-            raw_filtered = self.loader.load(filtered_dump)
-            pos_surface = raw_filtered["positions"]
+            # Ejemplo choronga: número de puntos
+            n = pos.shape[0]
 
-
-            # aligned es Nx3 listo para features
-
-
-
+            return {
+                "file": Path(file_path).name,
+                "num_points": n
+            }
 
         except Exception as e:
             print(f"[ERROR] {file_path}: {e}")
             return None
+
+
+
 
     # --------------------------------------------------------------
     # PROCESAR DIRECTORIO ENTERO
@@ -72,8 +69,7 @@ class ExtractorPipeline:
 
         for f in tqdm(files, desc="Procesando dumps"):
             result = self.process_single(f)
-            if result:
-                rows.append(result)
+         
 
         if not rows:
             print("No se extrajo ningún resultado.")
