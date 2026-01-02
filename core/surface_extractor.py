@@ -76,12 +76,17 @@ class SurfaceExtractor:
 
         data = pipeline.compute()
 
-      
-        export_file(
-            pipeline,
-            str(output_path),
-            "lammps/dump",
-            columns=["Position.X", "Position.Y", "Position.Z"]
-        )
-        pipeline.clear()
-        return str(output_path)
+        positions = data.particles.positions
+        if positions.shape[0] == 0:
+            raise ValueError("No quedaron partículas de superficie")
+
+        else:
+            com = np.mean(positions, axis=0)
+            export_file(
+                pipeline,
+                str(output_path),
+                "lammps/dump",
+                columns=["Position.X", "Position.Y", "Position.Z"]
+            )
+            #pipeline.clear()
+            return str(output_path)
