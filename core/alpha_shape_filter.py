@@ -574,7 +574,8 @@ class LAMMPSDumpParser:
                                 val = values[col_idx]
                             atom_dict[col_name] = val
 
-                        atom_id = int(values[0])
+                        # Usar el ID ya parseado correctamente
+                        atom_id = atom_dict['id']
                         data['atoms'][atom_id] = atom_dict
                         data['atom_ids_ordered'].append(atom_id)
 
