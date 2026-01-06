@@ -88,17 +88,29 @@ class ExtractorPipeline:
         """
         input_dir = Path(self.cfg.input_dir)
 
+        # Extensiones a IGNORAR (no son dumps LAMMPS)
+        ignore_extensions = {
+            '.png', '.jpg', '.jpeg', '.gif', '.bmp',  # Imágenes
+            '.csv', '.xlsx', '.xls',  # Hojas de cálculo
+            '.py', '.pyc', '.pyo', '.pyx',  # Python
+            '.txt', '.log', '.out',  # Logs/texto
+            '.json', '.xml', '.yaml', '.yml',  # Config
+            '.pdf', '.doc', '.docx',  # Documentos
+            '.zip', '.tar', '.gz', '.bz2',  # Comprimidos
+        }
+
         files = sorted(
             str(f) for f in input_dir.glob("*")
-            if not f.name.endswith("_surface_normalized.dump")
+            if f.is_file()  # Solo archivos (no directorios)
+            and not f.name.endswith("_surface_normalized.dump")  # No archivos procesados
+            and f.suffix.lower() not in ignore_extensions  # No extensiones ignoradas
         )
 
-
         if not files:
-            print(f"No se encontraron archivos .dump en: {input_dir}")
+            print(f"No se encontraron archivos dump válidos en: {input_dir}")
             return None
 
-        print(f"Archivos encontrados: {len(files)}")
+        print(f"Archivos dump encontrados: {len(files)}")
         rows = []
 
         for f in tqdm(files, desc="Procesando dumps"):

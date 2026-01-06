@@ -93,6 +93,21 @@ git pull origin claude/integrate-gui-windows-D2Jbi
 
 **Nota técnica:** El extractor ahora usa QTimer + QApplication.processEvents() en lugar de QThread para mantener la UI responsive sin causar conflictos con OVITO.
 
+### Error: "Invalid box size in line 7 of dump file"
+**Descripción:** OVITO reporta errores al leer ciertos dumps con box boundaries en notación científica.
+
+**Causa:** Algunos dumps LAMMPS usan box boundaries con valores muy pequeños en notación científica (e.g., `-3.17e-02 5.65e+01`). OVITO puede tener problemas parseando estos formatos.
+
+**Solución:**
+1. Los archivos con errores se saltan automáticamente (no detienen el procesamiento)
+2. Los archivos válidos se procesan correctamente
+3. Solo los archivos con formato dump válido son procesados (se ignoran .png, .csv, .py, etc.)
+
+**Nota:** Si todos tus dumps fallan, verifica que:
+- Sean archivos dump LAMMPS válidos
+- Tengan el header estándar `ITEM: ATOMS`
+- Los box boundaries estén en formato correcto
+
 ### Error: "TypeError: __init__() got an unexpected keyword argument 'num_ghost_layers'"
 **Solución:** Este error ya fue corregido. Haz pull de la rama:
 ```bash

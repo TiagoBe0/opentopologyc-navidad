@@ -205,9 +205,23 @@ class ExtractorGUIQt(BaseWindow):
 
             # Obtener lista de archivos
             input_dir = Path(config.input_dir)
+
+            # Extensiones a IGNORAR (no son dumps LAMMPS)
+            ignore_extensions = {
+                '.png', '.jpg', '.jpeg', '.gif', '.bmp',
+                '.csv', '.xlsx', '.xls',
+                '.py', '.pyc', '.pyo', '.pyx',
+                '.txt', '.log', '.out',
+                '.json', '.xml', '.yaml', '.yml',
+                '.pdf', '.doc', '.docx',
+                '.zip', '.tar', '.gz', '.bz2',
+            }
+
             self.files_to_process = sorted(
                 str(f) for f in input_dir.glob("*")
-                if not f.name.endswith("_surface_normalized.dump")
+                if f.is_file()
+                and not f.name.endswith("_surface_normalized.dump")
+                and f.suffix.lower() not in ignore_extensions
             )
 
             if not self.files_to_process:
