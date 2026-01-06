@@ -4,7 +4,7 @@
 
 """
 Pipeline de predicción de vacancias
-Integra: Alpha Shape → Extracción de Features → Predicción
+Integra: Alpha Shape → Clustering → Extracción de Features → Predicción
 """
 
 from pathlib import Path
@@ -12,7 +12,8 @@ import joblib
 import pandas as pd
 import numpy as np
 
-from core.alpha_shape_filter import filter_surface_atoms
+from core.alpha_shape_filter import filter_surface_atoms, LAMMPSDumpParser
+from core.clustering_engine import cluster_surface_atoms, ClusteringEngine
 from core.loader import DumpLoader
 from core.normalizer import PositionNormalizer
 from core.feature_extractor import FeatureExtractor
@@ -22,6 +23,7 @@ from config.extractor_config import ExtractorConfig
 class PredictionPipeline:
     """
     Pipeline completo para predecir vacancias en un dump
+    Flujo: Alpha Shape → Clustering → Features → Predicción
     """
 
     def __init__(self, model_path, config: ExtractorConfig):
@@ -47,8 +49,14 @@ class PredictionPipeline:
         self.normalizer = PositionNormalizer(scale_factor=self.config.a0)
         self.features_extractor = FeatureExtractor(self.config)
 
-    def predict_single(self, dump_file, apply_alpha_shape=True,
-                      probe_radius=2.0, num_ghost_layers=2):
+    def predict_single(self, dump_file,
+                      apply_alpha_shape=True,
+                      probe_radius=2.0,
+                      num_ghost_layers=2,
+                      apply_clustering=False,
+                      clustering_method="KMeans",
+                      clustering_params=None,
+                      target_cluster="largest"):
         """
         Predice el número de vacancias para un archivo dump
 
@@ -57,6 +65,10 @@ class PredictionPipeline:
             apply_alpha_shape: Si True, aplica filtro Alpha Shape primero
             probe_radius: Radio de prueba para Alpha Shape
             num_ghost_layers: Número de capas ghost
+            apply_clustering: Si True, aplica clustering después de Alpha Shape
+            clustering_method: Método de clustering ("KMeans", "MeanShift", "Aglomerativo", "HDBSCAN")
+            clustering_params: Parámetros del clustering (dict)
+            target_cluster: Qué cluster procesar ("largest", "all", o int para cluster específico)
 
         Returns:
             dict con resultados de la predicción
@@ -69,14 +81,14 @@ class PredictionPipeline:
         print(f"\nArchivo: {dump_file.name}")
 
         # PASO 1: Obtener número real de átomos en simulación
-        print(f"\n[1/4] Leyendo archivo original...")
+        print(f"\n[1/5] Leyendo archivo original...")
         original_data = self.loader.load(dump_file)
         num_atoms_real = original_data["num_atoms"]
         print(f"  ✓ Átomos en simulación: {num_atoms_real}")
 
         # PASO 2: Aplicar Alpha Shape (opcional)
         if apply_alpha_shape:
-            print(f"\n[2/4] Aplicando filtro Alpha Shape...")
+            print(f"\n[2/5] Aplicando filtro Alpha Shape...")
             surface_dump = dump_file.parent / f"{dump_file.stem}_surface_filtered.dump"
 
             filter_result = filter_surface_atoms(
@@ -90,38 +102,141 @@ class PredictionPipeline:
 
             print(f"  ✓ Átomos superficiales: {filter_result['output_atoms']}")
             file_to_process = surface_dump
+            num_surface_atoms = filter_result['output_atoms']
         else:
-            print(f"\n[2/4] Saltando filtro Alpha Shape...")
+            print(f"\n[2/5] Saltando filtro Alpha Shape...")
             file_to_process = dump_file
+            num_surface_atoms = num_atoms_real
 
-        # PASO 3: Extraer features
-        print(f"\n[3/4] Extrayendo features...")
+        # PASO 3: Aplicar Clustering (opcional)
+        clustering_info = None
+        if apply_clustering:
+            print(f"\n[3/5] Aplicando Clustering ({clustering_method})...")
+
+            # Leer archivo filtrado
+            dump_data = LAMMPSDumpParser.read(str(file_to_process))
+            positions = dump_data['positions']
+
+            # Configurar parámetros por defecto si no se proporcionan
+            if clustering_params is None:
+                if clustering_method == "KMeans":
+                    clustering_params = {'n_clusters': 5}
+                elif clustering_method == "MeanShift":
+                    clustering_params = {'quantile': 0.2}
+                elif clustering_method == "Aglomerativo":
+                    clustering_params = {'n_clusters': 5, 'linkage': 'ward'}
+                elif clustering_method == "HDBSCAN":
+                    clustering_params = {'min_cluster_size': 10, 'min_samples': None}
+
+            # Aplicar clustering
+            labels, cluster_info = cluster_surface_atoms(
+                positions=positions,
+                method=clustering_method,
+                **clustering_params
+            )
+
+            print(f"  ✓ Clusters encontrados: {cluster_info['n_clusters']}")
+
+            # Mostrar métricas si están disponibles
+            if 'metrics' in cluster_info:
+                metrics = cluster_info['metrics']
+                if 'silhouette' in metrics:
+                    print(f"    - Silhouette: {metrics['silhouette']:.3f}")
+                if 'cluster_size_mean' in metrics:
+                    print(f"    - Tamaño promedio: {metrics['cluster_size_mean']:.1f} átomos")
+
+            clustering_info = {
+                'method': clustering_method,
+                'n_clusters': cluster_info['n_clusters'],
+                'labels': labels,
+                'info': cluster_info
+            }
+
+            # Determinar qué cluster(s) procesar
+            if target_cluster == "largest":
+                # Encontrar el cluster más grande
+                cluster_sizes = {
+                    label: (labels == label).sum()
+                    for label in np.unique(labels)
+                    if label != -1  # Excluir ruido en HDBSCAN
+                }
+                if cluster_sizes:
+                    largest_cluster = max(cluster_sizes, key=cluster_sizes.get)
+                    print(f"  ✓ Procesando cluster más grande: Cluster {largest_cluster} ({cluster_sizes[largest_cluster]} átomos)")
+
+                    # Filtrar átomos del cluster
+                    cluster_mask = labels == largest_cluster
+                    cluster_positions = positions[cluster_mask]
+
+                    # Guardar cluster en archivo temporal
+                    cluster_dump = file_to_process.parent / f"{file_to_process.stem}_cluster_{largest_cluster}.dump"
+                    filtered_atom_ids = [dump_data['atom_ids_ordered'][i] for i, m in enumerate(cluster_mask) if m]
+                    LAMMPSDumpParser.write(str(cluster_dump), dump_data, filtered_atom_ids)
+
+                    file_to_process = cluster_dump
+                    clustering_info['target_cluster'] = largest_cluster
+                    clustering_info['cluster_size'] = cluster_sizes[largest_cluster]
+
+            elif target_cluster == "all":
+                print(f"  ⚠ Modo 'all' aún no implementado, usando cluster más grande")
+                # TODO: Implementar procesamiento de todos los clusters
+                target_cluster = "largest"
+
+            elif isinstance(target_cluster, int):
+                # Procesar cluster específico
+                if target_cluster in np.unique(labels):
+                    cluster_mask = labels == target_cluster
+                    cluster_size = cluster_mask.sum()
+                    print(f"  ✓ Procesando cluster específico: Cluster {target_cluster} ({cluster_size} átomos)")
+
+                    # Guardar cluster
+                    cluster_dump = file_to_process.parent / f"{file_to_process.stem}_cluster_{target_cluster}.dump"
+                    filtered_atom_ids = [dump_data['atom_ids_ordered'][i] for i, m in enumerate(cluster_mask) if m]
+                    LAMMPSDumpParser.write(str(cluster_dump), dump_data, filtered_atom_ids)
+
+                    file_to_process = cluster_dump
+                    clustering_info['target_cluster'] = target_cluster
+                    clustering_info['cluster_size'] = cluster_size
+                else:
+                    print(f"  ⚠ Cluster {target_cluster} no existe, usando cluster más grande")
+                    target_cluster = "largest"
+        else:
+            print(f"\n[3/5] Saltando Clustering...")
+
+        # PASO 4: Extraer features
+        print(f"\n[4/5] Extrayendo features...")
         features = self._extract_features(file_to_process)
         print(f"  ✓ Features extraídas: {len(features)}")
 
-        # PASO 4: Predecir
-        print(f"\n[4/4] Realizando predicción...")
+        # PASO 5: Predecir
+        print(f"\n[5/5] Realizando predicción...")
         prediction = self._predict_features(features)
 
-        # Calcular vacancias reales (si se conoce total_atoms)
+        # Calcular vacancias reales
         n_vacancies_real = self.config.total_atoms - num_atoms_real
 
         result = {
             'file': dump_file.name,
             'num_atoms_in_simulation': num_atoms_real,
-            'num_surface_atoms': filter_result['output_atoms'] if apply_alpha_shape else num_atoms_real,
+            'num_surface_atoms': num_surface_atoms,
             'predicted_vacancies': prediction,
             'real_vacancies': n_vacancies_real,
             'error': abs(prediction - n_vacancies_real),
             'features': features,
-            'alpha_shape_applied': apply_alpha_shape
+            'alpha_shape_applied': apply_alpha_shape,
+            'clustering_applied': apply_clustering,
+            'clustering_info': clustering_info
         }
 
         print(f"\n{'='*80}")
         print(f"RESULTADO")
         print(f"{'='*80}")
         print(f"  Átomos en simulación: {num_atoms_real}")
-        print(f"  Átomos superficiales:  {result['num_surface_atoms']}")
+        print(f"  Átomos superficiales:  {num_surface_atoms}")
+        if clustering_info:
+            print(f"  Clusters encontrados:  {clustering_info['n_clusters']}")
+            if 'target_cluster' in clustering_info:
+                print(f"  Cluster procesado:     {clustering_info['target_cluster']} ({clustering_info['cluster_size']} átomos)")
         print(f"  Vacancias predichas:   {prediction:.2f}")
         print(f"  Vacancias reales:      {n_vacancies_real}")
         print(f"  Error absoluto:        {result['error']:.2f}")
@@ -166,10 +281,10 @@ class PredictionPipeline:
         """
         Hace predicción usando el modelo cargado
         """
-        # Convertir features a DataFrame (como en entrenamiento)
+        # Convertir features a DataFrame
         df = pd.DataFrame([features])
 
-        # Remover columnas que no son features (igual que en entrenamiento)
+        # Remover columnas que no son features
         forbidden_features = ['n_vacancies', 'n_atoms_surface', 'vacancies', 'file', 'num_atoms_real']
         X = df.drop(columns=[col for col in forbidden_features if col in df.columns], errors='ignore')
 

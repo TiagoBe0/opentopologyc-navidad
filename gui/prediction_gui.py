@@ -35,6 +35,16 @@ class PredictionGUI:
         self.var_probe_radius = tk.DoubleVar(value=2.0)
         self.var_num_ghost_layers = tk.IntVar(value=2)
 
+        # Parámetros de clustering
+        self.var_apply_clustering = tk.BooleanVar(value=False)
+        self.var_clustering_method = tk.StringVar(value="KMeans")
+        self.var_n_clusters = tk.IntVar(value=5)
+        self.var_quantile = tk.DoubleVar(value=0.2)
+        self.var_linkage = tk.StringVar(value="ward")
+        self.var_min_cluster_size = tk.IntVar(value=10)
+        self.var_target_cluster = tk.StringVar(value="largest")
+        self.var_specific_cluster = tk.IntVar(value=0)
+
         # Parámetros del material
         self.var_total_atoms = tk.IntVar(value=16384)
         self.var_a0 = tk.DoubleVar(value=3.532)
@@ -131,6 +141,67 @@ class PredictionGUI:
         ghost_frame.pack(fill="x", pady=(0, 10))
         ttk.Label(ghost_frame, text="Ghost layers:", width=20, anchor="w").pack(side="left")
         ttk.Spinbox(ghost_frame, from_=1, to=5, textvariable=self.var_num_ghost_layers, width=15).pack(side="left")
+
+        # SECCIÓN 2.5: PARÁMETROS DE CLUSTERING
+        section2_5 = ttk.LabelFrame(content_frame, text="Parámetros de Clustering", padding=10)
+        section2_5.pack(fill="x", pady=(0, 15))
+
+        # Checkbox para activar/desactivar
+        ttk.Checkbutton(
+            section2_5,
+            text="Aplicar clustering (para aislar nanoporos individuales)",
+            variable=self.var_apply_clustering,
+            command=self.toggle_clustering_params
+        ).pack(anchor="w", pady=(0, 10))
+
+        # Frame para parámetros de clustering
+        self.clustering_params_frame = ttk.Frame(section2_5)
+        self.clustering_params_frame.pack(fill="x")
+
+        # Método de clustering
+        method_frame = ttk.Frame(self.clustering_params_frame)
+        method_frame.pack(fill="x", pady=(0, 10))
+        ttk.Label(method_frame, text="Método:", width=20, anchor="w").pack(side="left")
+        self.method_combo = ttk.Combobox(
+            method_frame,
+            textvariable=self.var_clustering_method,
+            values=["KMeans", "MeanShift", "Aglomerativo", "HDBSCAN"],
+            width=18,
+            state="readonly"
+        )
+        self.method_combo.pack(side="left")
+        self.method_combo.bind("<<ComboboxSelected>>", self.update_clustering_params)
+
+        # Frame dinámico para parámetros específicos del método
+        self.method_params_frame = ttk.Frame(self.clustering_params_frame)
+        self.method_params_frame.pack(fill="x", pady=(0, 10))
+        self.update_clustering_params()
+
+        # Target cluster
+        target_frame = ttk.Frame(self.clustering_params_frame)
+        target_frame.pack(fill="x", pady=(0, 10))
+        ttk.Label(target_frame, text="Cluster objetivo:", width=20, anchor="w").pack(side="left")
+        target_combo = ttk.Combobox(
+            target_frame,
+            textvariable=self.var_target_cluster,
+            values=["largest", "all", "specific"],
+            width=18,
+            state="readonly"
+        )
+        target_combo.pack(side="left", padx=(0, 10))
+        target_combo.bind("<<ComboboxSelected>>", self.toggle_specific_cluster)
+
+        # Spinbox para cluster específico
+        ttk.Label(target_frame, text="Cluster #:", anchor="w").pack(side="left", padx=(10, 5))
+        self.specific_cluster_spinbox = ttk.Spinbox(
+            target_frame,
+            from_=0,
+            to=100,
+            textvariable=self.var_specific_cluster,
+            width=10,
+            state="disabled"
+        )
+        self.specific_cluster_spinbox.pack(side="left")
 
         # SECCIÓN 3: PARÁMETROS DEL MATERIAL
         section3 = ttk.LabelFrame(content_frame, text="Parámetros del Material", padding=10)
@@ -258,6 +329,9 @@ class PredictionGUI:
             length=200
         )
 
+        # Inicializar estado de controles
+        self.toggle_clustering_params()
+
     def toggle_alpha_params(self):
         """Habilita/deshabilita parámetros de Alpha Shape"""
         if self.var_apply_alpha.get():
@@ -269,6 +343,70 @@ class PredictionGUI:
                 for widget in child.winfo_children():
                     if isinstance(widget, (ttk.Entry, ttk.Spinbox)):
                         widget.config(state="disabled")
+
+    def toggle_clustering_params(self):
+        """Habilita/deshabilita parámetros de clustering"""
+        state = "normal" if self.var_apply_clustering.get() else "disabled"
+
+        # Habilitar/deshabilitar todos los controles en clustering_params_frame
+        for child in self.clustering_params_frame.winfo_children():
+            for widget in child.winfo_children():
+                if isinstance(widget, (ttk.Entry, ttk.Spinbox, ttk.Combobox)):
+                    widget.config(state=state if state == "normal" else "readonly" if isinstance(widget, ttk.Combobox) else "disabled")
+
+    def update_clustering_params(self, event=None):
+        """Actualiza los parámetros según el método seleccionado"""
+        # Limpiar frame de parámetros
+        for widget in self.method_params_frame.winfo_children():
+            widget.destroy()
+
+        method = self.var_clustering_method.get()
+
+        if method == "KMeans":
+            # Parámetro: n_clusters
+            frame = ttk.Frame(self.method_params_frame)
+            frame.pack(fill="x")
+            ttk.Label(frame, text="Número de clusters:", width=20, anchor="w").pack(side="left")
+            ttk.Spinbox(frame, from_=2, to=20, textvariable=self.var_n_clusters, width=10).pack(side="left")
+
+        elif method == "MeanShift":
+            # Parámetro: quantile
+            frame = ttk.Frame(self.method_params_frame)
+            frame.pack(fill="x")
+            ttk.Label(frame, text="Quantile (0-1):", width=20, anchor="w").pack(side="left")
+            ttk.Entry(frame, textvariable=self.var_quantile, width=10).pack(side="left")
+
+        elif method == "Aglomerativo":
+            # Parámetros: n_clusters y linkage
+            frame1 = ttk.Frame(self.method_params_frame)
+            frame1.pack(fill="x", pady=(0, 5))
+            ttk.Label(frame1, text="Número de clusters:", width=20, anchor="w").pack(side="left")
+            ttk.Spinbox(frame1, from_=2, to=20, textvariable=self.var_n_clusters, width=10).pack(side="left")
+
+            frame2 = ttk.Frame(self.method_params_frame)
+            frame2.pack(fill="x")
+            ttk.Label(frame2, text="Linkage:", width=20, anchor="w").pack(side="left")
+            ttk.Combobox(
+                frame2,
+                textvariable=self.var_linkage,
+                values=["ward", "complete", "average", "single"],
+                width=8,
+                state="readonly"
+            ).pack(side="left")
+
+        elif method == "HDBSCAN":
+            # Parámetro: min_cluster_size
+            frame = ttk.Frame(self.method_params_frame)
+            frame.pack(fill="x")
+            ttk.Label(frame, text="Tamaño mínimo cluster:", width=20, anchor="w").pack(side="left")
+            ttk.Spinbox(frame, from_=5, to=100, textvariable=self.var_min_cluster_size, width=10).pack(side="left")
+
+    def toggle_specific_cluster(self, event=None):
+        """Habilita/deshabilita el spinbox de cluster específico"""
+        if self.var_target_cluster.get() == "specific":
+            self.specific_cluster_spinbox.config(state="normal")
+        else:
+            self.specific_cluster_spinbox.config(state="disabled")
 
     def select_all_features(self):
         """Selecciona todas las features"""
@@ -356,12 +494,19 @@ class PredictionGUI:
             return
 
         # Confirmar
+        clustering_info = ""
+        if self.var_apply_clustering.get():
+            clustering_info = f"Clustering: Sí ({self.var_clustering_method.get()})\n"
+        else:
+            clustering_info = "Clustering: No\n"
+
         confirm = messagebox.askyesno(
             "Confirmar predicción",
             f"¿Está seguro de realizar la predicción?\n\n"
             f"Dump: {Path(self.var_input_dump.get()).name}\n"
             f"Modelo: {Path(self.var_model_file.get()).name}\n"
-            f"Alpha Shape: {'Sí' if self.var_apply_alpha.get() else 'No'}\n\n"
+            f"Alpha Shape: {'Sí' if self.var_apply_alpha.get() else 'No'}\n"
+            f"{clustering_info}\n"
             f"Este proceso puede tomar algunos minutos."
         )
 
@@ -406,13 +551,41 @@ class PredictionGUI:
                 config=config
             )
 
+            # Preparar parámetros de clustering
+            clustering_params = None
+            if self.var_apply_clustering.get():
+                method = self.var_clustering_method.get()
+                if method == "KMeans":
+                    clustering_params = {'n_clusters': self.var_n_clusters.get()}
+                elif method == "MeanShift":
+                    clustering_params = {'quantile': self.var_quantile.get()}
+                elif method == "Aglomerativo":
+                    clustering_params = {
+                        'n_clusters': self.var_n_clusters.get(),
+                        'linkage': self.var_linkage.get()
+                    }
+                elif method == "HDBSCAN":
+                    clustering_params = {
+                        'min_cluster_size': self.var_min_cluster_size.get(),
+                        'min_samples': None
+                    }
+
+            # Determinar target cluster
+            target_cluster = self.var_target_cluster.get()
+            if target_cluster == "specific":
+                target_cluster = self.var_specific_cluster.get()
+
             # Predecir
             self.log_result("Ejecutando predicción...", "INFO")
             result = pipeline.predict_single(
                 dump_file=self.var_input_dump.get(),
                 apply_alpha_shape=self.var_apply_alpha.get(),
                 probe_radius=self.var_probe_radius.get(),
-                num_ghost_layers=self.var_num_ghost_layers.get()
+                num_ghost_layers=self.var_num_ghost_layers.get(),
+                apply_clustering=self.var_apply_clustering.get(),
+                clustering_method=self.var_clustering_method.get(),
+                clustering_params=clustering_params,
+                target_cluster=target_cluster
             )
 
             # Mostrar resultados
@@ -420,6 +593,15 @@ class PredictionGUI:
             self.log_result(f"Archivo: {result['file']}", "INFO")
             self.log_result(f"Átomos en simulación: {result['num_atoms_in_simulation']}", "INFO")
             self.log_result(f"Átomos superficiales: {result['num_surface_atoms']}", "INFO")
+
+            # Mostrar info de clustering si aplica
+            if result.get('clustering_applied') and result.get('clustering_info'):
+                cinfo = result['clustering_info']
+                self.log_result(f"Clustering aplicado: {cinfo['method']}", "INFO")
+                self.log_result(f"Clusters encontrados: {cinfo['n_clusters']}", "INFO")
+                if 'target_cluster' in cinfo:
+                    self.log_result(f"Cluster procesado: {cinfo['target_cluster']} ({cinfo['cluster_size']} átomos)", "INFO")
+
             self.log_result(f"Vacancias predichas: {result['predicted_vacancies']:.2f}", "SUCCESS")
             self.log_result(f"Vacancias reales: {result['real_vacancies']}", "INFO")
             self.log_result(f"Error absoluto: {result['error']:.2f}", "WARNING" if result['error'] > 5 else "SUCCESS")
