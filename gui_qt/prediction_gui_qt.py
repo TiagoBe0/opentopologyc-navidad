@@ -12,6 +12,7 @@ from gui_qt.base_window import BaseWindow
 from gui_qt.visualizer_3d_qt import AtomVisualizer3DQt
 
 from core.prediction_pipeline import PredictionPipeline
+from config.extractor_config import ExtractorConfig
 
 
 class PredictionGUIQt(BaseWindow):
@@ -128,27 +129,63 @@ class PredictionGUIQt(BaseWindow):
             return
 
         try:
-            self.pipeline = PredictionPipeline(
-                dump_file=self.dump_path,
-                model_file=self.model_path,
-                apply_alpha=self.chk_alpha.isChecked(),
+            # Crear configuración
+            config = ExtractorConfig(
+                input_dir=".",
                 probe_radius=self.spin_probe.value(),
-                num_ghost_layers=self.spin_ghost.value(),
+                total_atoms=16384,  # TODO: hacer configurable
+                a0=3.532,  # TODO: hacer configurable
+                lattice_type="fcc",  # TODO: hacer configurable
+                compute_grid_features=True,
+                compute_hull_features=True,
+                compute_inertia_features=True,
+                compute_radial_features=True,
+                compute_entropy_features=True,
+                compute_clustering_features=True
             )
 
-            result = self.pipeline.run()
+            # Crear pipeline
+            self.pipeline = PredictionPipeline(
+                model_path=self.model_path,
+                config=config,
+                logger=lambda msg: print(msg)  # TODO: integrar con GUI log
+            )
 
-            # Enviar datos al visualizador
-            self.visualizer.positions = result["positions"]
-            self.visualizer.colors = result.get("vacancy_prob", None)
-            self.visualizer.plot()
-
-            # Clustering visual
+            # Preparar parámetros de clustering
+            clustering_params = None
             if self.chk_cluster.isChecked():
-                self.visualizer.apply_clustering(
-                    method=self.cmb_method.currentText(),
-                    n_clusters=self.spin_clusters.value(),
-                )
+                clustering_params = {'n_clusters': self.spin_clusters.value()}
+
+            # Ejecutar predicción
+            result = self.pipeline.predict_single(
+                dump_file=self.dump_path,
+                apply_alpha_shape=self.chk_alpha.isChecked(),
+                probe_radius=self.spin_probe.value(),
+                num_ghost_layers=self.spin_ghost.value(),
+                apply_clustering=self.chk_cluster.isChecked(),
+                clustering_method=self.cmb_method.currentText(),
+                clustering_params=clustering_params,
+                target_cluster="largest",
+                save_intermediate_stages=True
+            )
+
+            # Cargar etapas intermedias en visualizador
+            if result.get("intermediate_stages"):
+                self.visualizer.load_stages(result["intermediate_stages"])
+
+            # Mostrar resultados
+            msg = f"Predicción completada!\n\n"
+            msg += f"Vacancias predichas: {result['predicted_vacancies']:.2f}\n"
+            msg += f"Vacancias reales: {result['real_vacancies']}\n"
+            msg += f"Error absoluto: {result['error']:.2f}\n\n"
+
+            if result.get('clustering_applied'):
+                cinfo = result.get('clustering_info', {})
+                msg += f"Clusters encontrados: {cinfo.get('n_clusters', 'N/A')}\n"
+
+            QMessageBox.information(self, "Éxito", msg)
 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             QMessageBox.critical(self, "Error", str(e))

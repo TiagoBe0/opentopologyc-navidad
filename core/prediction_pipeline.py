@@ -76,10 +76,14 @@ class PredictionPipeline:
         clustering_method="KMeans",
         clustering_params=None,
         target_cluster="largest",
-        progress_callback=None
+        progress_callback=None,
+        save_intermediate_stages=True
     ):
         dump_file = Path(dump_file)
         TOTAL = 5
+
+        # Estructura para guardar etapas intermedias para visualización
+        intermediate_stages = {} if save_intermediate_stages else None
 
         self._log("\n" + "=" * 80)
         self._log("PREDICCIÓN DE VACANCIAS")
@@ -96,6 +100,15 @@ class PredictionPipeline:
         original_data = self.loader.load(dump_file)
         num_atoms_real = original_data["num_atoms"]
         self._log(f"  ✓ Átomos en simulación: {num_atoms_real}")
+
+        # Guardar etapa original
+        if save_intermediate_stages:
+            intermediate_stages['1_original'] = {
+                'name': '1. Original',
+                'positions': original_data['positions'].copy(),
+                'labels': None,
+                'info': {'Átomos': num_atoms_real}
+            }
 
         # --------------------------------------------------
         # STEP 2: ALPHA SHAPE
@@ -119,6 +132,20 @@ class PredictionPipeline:
             num_surface_atoms = filter_result["output_atoms"]
             self._log(f"  ✓ Átomos superficiales: {num_surface_atoms}")
             file_to_process = surface_dump
+
+            # Guardar etapa de Alpha Shape
+            if save_intermediate_stages:
+                surface_data = self.loader.load(surface_dump)
+                intermediate_stages['2_alpha_shape'] = {
+                    'name': '2. Alpha Shape',
+                    'positions': surface_data['positions'].copy(),
+                    'labels': None,
+                    'info': {
+                        'Átomos': num_surface_atoms,
+                        'Probe radius': probe_radius,
+                        'Ghost layers': num_ghost_layers
+                    }
+                }
         else:
             self._log("\n[2/5] Saltando filtro Alpha Shape...")
             num_surface_atoms = num_atoms_real
@@ -163,6 +190,19 @@ class PredictionPipeline:
                 "info": cluster_info,
             }
 
+            # Guardar etapa de clustering (todos los clusters)
+            if save_intermediate_stages:
+                intermediate_stages['3_clustering'] = {
+                    'name': f'3. Clustering ({clustering_method})',
+                    'positions': positions.copy(),
+                    'labels': labels.copy(),
+                    'info': {
+                        'Método': clustering_method,
+                        'Clusters': cluster_info['n_clusters'],
+                        'Átomos': len(positions)
+                    }
+                }
+
             # Selección de cluster
             if target_cluster == "largest":
                 cluster_sizes = {
@@ -186,6 +226,19 @@ class PredictionPipeline:
                     file_to_process = cluster_dump
                     clustering_info["target_cluster"] = largest
                     clustering_info["cluster_size"] = size
+
+                    # Guardar etapa del cluster seleccionado
+                    if save_intermediate_stages:
+                        cluster_positions = positions[mask]
+                        intermediate_stages['4_selected_cluster'] = {
+                            'name': f'4. Cluster Seleccionado ({largest})',
+                            'positions': cluster_positions.copy(),
+                            'labels': None,
+                            'info': {
+                                'Cluster': largest,
+                                'Átomos': size
+                            }
+                        }
         else:
             self._log("\n[3/5] Saltando Clustering...")
 
@@ -221,6 +274,7 @@ class PredictionPipeline:
             "alpha_shape_applied": apply_alpha_shape,
             "clustering_applied": apply_clustering,
             "clustering_info": clustering_info,
+            "intermediate_stages": intermediate_stages,
         }
 
         self._log("\n" + "=" * 80)

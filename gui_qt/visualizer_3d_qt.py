@@ -20,7 +20,7 @@ matplotlib.use("QtAgg")
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QSlider, QCheckBox,
-    QFileDialog, QGroupBox
+    QFileDialog, QGroupBox, QComboBox
 )
 from PyQt5.QtCore import Qt
 
@@ -44,6 +44,10 @@ class AtomVisualizer3DQt(QWidget):
         self.cluster_labels = None
         self.highlight_cluster = None
 
+        # Etapas múltiples (para visualizar pipeline)
+        self.stages = {}  # {'key': {'name':str, 'positions':ndarray, 'labels':ndarray, 'info':dict}}
+        self.current_stage = None
+
         # Parámetros visuales
         self.atom_size = 20
         self.alpha = 0.85
@@ -60,21 +64,35 @@ class AtomVisualizer3DQt(QWidget):
 
         # ---------- CONTROLES ----------
         controls = QGroupBox("Visualización")
-        cl = QHBoxLayout()
+        cl = QVBoxLayout()
 
+        # Primera fila: Cargar dump y checkboxes
+        first_row = QHBoxLayout()
         btn_load = QPushButton("📂 Cargar dump")
         btn_load.clicked.connect(self.load_dump_dialog)
-        cl.addWidget(btn_load)
+        first_row.addWidget(btn_load)
 
         chk_axes = QCheckBox("Ejes")
         chk_axes.setChecked(True)
         chk_axes.stateChanged.connect(self.toggle_axes)
-        cl.addWidget(chk_axes)
+        first_row.addWidget(chk_axes)
 
         chk_grid = QCheckBox("Grid")
         chk_grid.setChecked(True)
         chk_grid.stateChanged.connect(self.toggle_grid)
-        cl.addWidget(chk_grid)
+        first_row.addWidget(chk_grid)
+        cl.addLayout(first_row)
+
+        # Segunda fila: Selector de etapas (inicialmente oculto)
+        stage_row = QHBoxLayout()
+        stage_row.addWidget(QLabel("Etapa:"))
+        self.stage_combo = QComboBox()
+        self.stage_combo.currentIndexChanged.connect(self.change_stage)
+        stage_row.addWidget(self.stage_combo)
+        self.stage_label = QLabel("")
+        stage_row.addWidget(self.stage_label)
+        stage_row.addStretch()
+        cl.addLayout(stage_row)
 
         controls.setLayout(cl)
         layout.addWidget(controls)
@@ -122,6 +140,58 @@ class AtomVisualizer3DQt(QWidget):
         self.cluster_labels = None
         self.highlight_cluster = None
         self.plot()
+
+    # ======================================================
+    # STAGES (ETAPAS MÚLTIPLES)
+    # ======================================================
+    def load_stages(self, stages_dict):
+        """
+        Carga múltiples etapas del pipeline
+
+        Args:
+            stages_dict: Dict con etapas {'key': {'name', 'positions', 'labels', 'info'}}
+        """
+        self.stages = stages_dict
+        self.stage_combo.clear()
+
+        if not stages_dict:
+            return
+
+        # Agregar etapas al combo (ordenadas por key)
+        sorted_keys = sorted(stages_dict.keys())
+        for key in sorted_keys:
+            stage = stages_dict[key]
+            self.stage_combo.addItem(stage['name'], key)
+
+        # Seleccionar última etapa por defecto
+        self.stage_combo.setCurrentIndex(len(sorted_keys) - 1)
+
+    def change_stage(self, index):
+        """Cambia la etapa visualizada"""
+        if index < 0 or not self.stages:
+            return
+
+        key = self.stage_combo.currentData()
+        if key not in self.stages:
+            return
+
+        self.current_stage = key
+        stage = self.stages[key]
+
+        # Actualizar datos
+        self.positions = stage['positions']
+        self.cluster_labels = stage.get('labels')
+
+        # Actualizar colores según labels
+        if self.cluster_labels is not None:
+            self.apply_clustering(self.cluster_labels)
+        else:
+            self.colors = None
+            self.plot()
+
+        # Actualizar label de información
+        info_str = " | ".join([f"{k}: {v}" for k, v in stage.get('info', {}).items()])
+        self.stage_label.setText(info_str)
 
     # ======================================================
     # CLUSTERING VISUAL
