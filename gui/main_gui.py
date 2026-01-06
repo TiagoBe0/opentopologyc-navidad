@@ -13,18 +13,19 @@ sys.path.append(str(Path(__file__).parent.parent))
 try:
     from gui.gui_extractor import ExtractorGUI
     from gui.train_gui import TrainingGUI
+    from gui.prediction_gui import PredictionGUI
 except ImportError as e:
     print(f"Error importando módulos: {e}")
     sys.exit(1)
 
 
 class MainGUI:
-    """GUI principal que permite seleccionar entre extracción y entrenamiento"""
-    
+    """GUI principal que permite seleccionar entre extracción, entrenamiento y predicción"""
+
     def __init__(self):
         self.window = tk.Tk()
         self.window.title("OpenTopologyC - Suite Completa")
-        self.window.geometry("500x400")
+        self.window.geometry("550x550")
         self.window.resizable(False, False)
         
         self.build_layout()
@@ -97,7 +98,26 @@ class MainGUI:
             foreground="gray"
         )
         trainer_desc.pack(pady=(0, 20))
-        
+
+        # Botón 3: Predicción de Vacancias
+        prediction_btn = ttk.Button(
+            options_frame,
+            text="🎯 Predicción de Vacancias",
+            command=self.open_prediction,
+            width=30,
+            style="Accent.TButton"
+        )
+        prediction_btn.pack(pady=10)
+
+        # Descripción
+        prediction_desc = ttk.Label(
+            options_frame,
+            text="Predice vacancias en un dump usando modelo entrenado",
+            font=("Arial", 9),
+            foreground="gray"
+        )
+        prediction_desc.pack(pady=(0, 20))
+
         # Botón Salir
         exit_btn = ttk.Button(
             options_frame,
@@ -133,7 +153,14 @@ class MainGUI:
         trainer_gui = TrainingGUI()
         trainer_gui.run()
         self.window.deiconify()
-        
+
+    def open_prediction(self):
+        """Abre la GUI de predicción"""
+        self.window.withdraw()
+        prediction_gui = PredictionGUI()
+        prediction_gui.run()
+        self.window.deiconify()
+
     def run(self):
         """Ejecuta la GUI principal"""
         # Centrar ventana
@@ -148,6 +175,7 @@ class MainGUI:
         self.window.bind('<Escape>', lambda e: self.window.quit())
         self.window.bind('<F1>', lambda e: self.open_extractor())
         self.window.bind('<F2>', lambda e: self.open_trainer())
+        self.window.bind('<F3>', lambda e: self.open_prediction())
         
         # Ejecutar
         self.window.mainloop()
