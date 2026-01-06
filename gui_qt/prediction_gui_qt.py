@@ -4,9 +4,10 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QFileDialog, QMessageBox, QGroupBox,
-    QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox
+    QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox,
+    QProgressDialog
 )
-from PyQt5.QtCore import Qt
+from PyQt5.QtCore import Qt, QThread, pyqtSignal
 
 from gui_qt.base_window import BaseWindow
 from gui_qt.visualizer_3d_qt import AtomVisualizer3DQt
@@ -15,10 +16,52 @@ from core.prediction_pipeline import PredictionPipeline
 from config.extractor_config import ExtractorConfig
 
 
+class PredictionWorker(QThread):
+    """Worker thread para ejecutar predicción sin bloquear la UI"""
+
+    # Señales
+    progress = pyqtSignal(int, int, str)  # step, total, message
+    finished = pyqtSignal(dict)  # result
+    error = pyqtSignal(str)  # error message
+
+    def __init__(self, pipeline, dump_path, params):
+        super().__init__()
+        self.pipeline = pipeline
+        self.dump_path = dump_path
+        self.params = params
+
+    def run(self):
+        """Ejecuta la predicción en thread separado"""
+        try:
+            result = self.pipeline.predict_single(
+                dump_file=self.dump_path,
+                apply_alpha_shape=self.params['apply_alpha_shape'],
+                probe_radius=self.params['probe_radius'],
+                num_ghost_layers=self.params['num_ghost_layers'],
+                apply_clustering=self.params['apply_clustering'],
+                clustering_method=self.params['clustering_method'],
+                clustering_params=self.params['clustering_params'],
+                target_cluster=self.params['target_cluster'],
+                save_intermediate_stages=True,
+                progress_callback=self.on_progress
+            )
+            self.finished.emit(result)
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            self.error.emit(str(e))
+
+    def on_progress(self, step, total, message):
+        """Callback de progreso"""
+        self.progress.emit(step, total, message)
+
+
 class PredictionGUIQt(BaseWindow):
     def __init__(self):
         super().__init__("OpenTopologyC - Predicción", (1200, 700))
         self.pipeline = None
+        self.worker = None
+        self.progress_dialog = None
         self._build_ui()
 
     # ======================================================
@@ -148,7 +191,7 @@ class PredictionGUIQt(BaseWindow):
             self.pipeline = PredictionPipeline(
                 model_path=self.model_path,
                 config=config,
-                logger=lambda msg: print(msg)  # TODO: integrar con GUI log
+                logger=lambda msg: print(msg)
             )
 
             # Preparar parámetros de clustering
@@ -156,36 +199,93 @@ class PredictionGUIQt(BaseWindow):
             if self.chk_cluster.isChecked():
                 clustering_params = {'n_clusters': self.spin_clusters.value()}
 
-            # Ejecutar predicción
-            result = self.pipeline.predict_single(
-                dump_file=self.dump_path,
-                apply_alpha_shape=self.chk_alpha.isChecked(),
-                probe_radius=self.spin_probe.value(),
-                num_ghost_layers=self.spin_ghost.value(),
-                apply_clustering=self.chk_cluster.isChecked(),
-                clustering_method=self.cmb_method.currentText(),
-                clustering_params=clustering_params,
-                target_cluster="largest",
-                save_intermediate_stages=True
+            # Preparar parámetros para el worker
+            params = {
+                'apply_alpha_shape': self.chk_alpha.isChecked(),
+                'probe_radius': self.spin_probe.value(),
+                'num_ghost_layers': self.spin_ghost.value(),
+                'apply_clustering': self.chk_cluster.isChecked(),
+                'clustering_method': self.cmb_method.currentText(),
+                'clustering_params': clustering_params,
+                'target_cluster': 'largest'
+            }
+
+            # Crear progress dialog
+            self.progress_dialog = QProgressDialog(
+                "Iniciando predicción...",
+                "Cancelar",
+                0,
+                5,
+                self
             )
+            self.progress_dialog.setWindowTitle("Procesando")
+            self.progress_dialog.setWindowModality(Qt.WindowModal)
+            self.progress_dialog.setMinimumDuration(0)
+            self.progress_dialog.canceled.connect(self.cancel_prediction)
 
-            # Cargar etapas intermedias en visualizador
-            if result.get("intermediate_stages"):
-                self.visualizer.load_stages(result["intermediate_stages"])
+            # Crear y configurar worker thread
+            self.worker = PredictionWorker(self.pipeline, self.dump_path, params)
+            self.worker.progress.connect(self.on_progress)
+            self.worker.finished.connect(self.on_prediction_finished)
+            self.worker.error.connect(self.on_prediction_error)
 
-            # Mostrar resultados
-            msg = f"Predicción completada!\n\n"
-            msg += f"Vacancias predichas: {result['predicted_vacancies']:.2f}\n"
-            msg += f"Vacancias reales: {result['real_vacancies']}\n"
-            msg += f"Error absoluto: {result['error']:.2f}\n\n"
-
-            if result.get('clustering_applied'):
-                cinfo = result.get('clustering_info', {})
-                msg += f"Clusters encontrados: {cinfo.get('n_clusters', 'N/A')}\n"
-
-            QMessageBox.information(self, "Éxito", msg)
+            # Iniciar worker
+            self.worker.start()
 
         except Exception as e:
             import traceback
             traceback.print_exc()
             QMessageBox.critical(self, "Error", str(e))
+
+    def on_progress(self, step, total, message):
+        """Actualiza la barra de progreso"""
+        if self.progress_dialog:
+            self.progress_dialog.setValue(step)
+            self.progress_dialog.setLabelText(f"[{step}/{total}] {message}")
+
+    def on_prediction_finished(self, result):
+        """Llamado cuando la predicción termina exitosamente"""
+        if self.progress_dialog:
+            self.progress_dialog.close()
+            self.progress_dialog = None
+
+        # Cargar etapas intermedias en visualizador
+        if result.get("intermediate_stages"):
+            self.visualizer.load_stages(result["intermediate_stages"])
+
+        # Mostrar resultados
+        msg = f"Predicción completada!\n\n"
+        msg += f"Vacancias predichas: {result['predicted_vacancies']:.2f}\n"
+        msg += f"Vacancias reales: {result['real_vacancies']}\n"
+        msg += f"Error absoluto: {result['error']:.2f}\n\n"
+
+        if result.get('clustering_applied'):
+            cinfo = result.get('clustering_info', {})
+            msg += f"Clusters encontrados: {cinfo.get('n_clusters', 'N/A')}\n"
+
+        QMessageBox.information(self, "Éxito", msg)
+
+        # Limpiar worker
+        self.worker = None
+
+    def on_prediction_error(self, error_msg):
+        """Llamado cuando ocurre un error en la predicción"""
+        if self.progress_dialog:
+            self.progress_dialog.close()
+            self.progress_dialog = None
+
+        QMessageBox.critical(self, "Error", f"Error en predicción:\n{error_msg}")
+
+        # Limpiar worker
+        self.worker = None
+
+    def cancel_prediction(self):
+        """Cancela la predicción en curso"""
+        if self.worker and self.worker.isRunning():
+            self.worker.terminate()
+            self.worker.wait()
+            self.worker = None
+
+        if self.progress_dialog:
+            self.progress_dialog.close()
+            self.progress_dialog = None
