@@ -407,9 +407,9 @@ class TrainingGUI:
                 
             # Reemplazar logger del entrenador
             self.trainer.logger = type('FakeLogger', (), {
-                'info': lambda msg: log_wrapper(msg),
-                'warning': lambda msg: self.window.after(0, self.log_to_console, msg, "WARNING"),
-                'error': lambda msg: self.window.after(0, self.log_to_console, msg, "ERROR"),
+                'info': lambda _, msg: log_wrapper(msg),
+                'warning': lambda _, msg: self.window.after(0, self.log_to_console, msg, "WARNING"),
+                'error': lambda _, msg: self.window.after(0, self.log_to_console, msg, "ERROR"),
             })()
             
             # Cargar datos
