@@ -9,7 +9,6 @@ from core.surface_extractor import SurfaceExtractor
 from config.extractor_config import ExtractorConfig
 from core.feature_extractor import FeatureExtractor
 from core.normalizer import PositionNormalizer
-from core.train_step import RandomForestTrainer
 
 class ExtractorPipeline:
     """
@@ -61,6 +60,9 @@ class ExtractorPipeline:
             feats["file"] = Path(file_path).name
             feats["num_points"] = pos.shape[0]
 
+            # Calcular número de vacancias
+            feats["n_vacancies"] = self.cfg.total_atoms - feats["num_points"]
+
             return feats
 
         except Exception as e:
@@ -111,24 +113,7 @@ class ExtractorPipeline:
         df.to_csv(output_csv)
 
         print(f"Dataset guardado en:\n{output_csv}")
-        #etapa de entrenamiento
-        # Uso programático
-        trainer = RandomForestTrainer(random_state=42)
-
-        # Cargar datos
-        X, y = trainer.load_data("dataset.csv")
-
-        # Entrenar
-        trainer.train(X, y, test_size=0.2)
-
-        # Evaluar
-        metrics = trainer.evaluate()
-
-        # Analizar importancia
-        importance_df = trainer.analyze_feature_importance(top_n=20)
-
-        # Guardar
-        trainer.save_model("model_rf")
-
+        print(f"Total de muestras extraídas: {len(df)}")
+        print(f"Columnas generadas: {list(df.columns)}")
 
         return df
