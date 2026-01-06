@@ -32,6 +32,11 @@ class ExtractorPipeline:
     # --------------------------------------------------------------
     def process_single(self, file_path):
         try:
+            # Primero cargar el archivo ORIGINAL para obtener el número real de átomos
+            original_data = self.loader.load(file_path)
+            num_atoms_real = original_data["num_atoms"]
+
+            # Ahora aplicar el filtro de superficie
             surface_dump = self.surface.extract(file_path)
             raw = self.loader.load(surface_dump)
 
@@ -58,10 +63,11 @@ class ExtractorPipeline:
                 feats.update(self.features.bandwidth(pos_norm))
 
             feats["file"] = Path(file_path).name
-            feats["num_points"] = pos.shape[0]
+            feats["num_points"] = pos.shape[0]  # Átomos de superficie
+            feats["num_atoms_real"] = num_atoms_real  # Átomos totales en simulación
 
-            # Calcular número de vacancias
-            feats["n_vacancies"] = self.cfg.total_atoms - feats["num_points"]
+            # Calcular número de vacancias CORRECTAMENTE
+            feats["n_vacancies"] = self.cfg.total_atoms - num_atoms_real
 
             return feats
 
