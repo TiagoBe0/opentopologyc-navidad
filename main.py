@@ -1,21 +1,21 @@
-from config.extractor_config import ExtractorConfig 
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+# opentopologyc/main.py
 
-from gui.gui_extractor import ExtractorGUI
-from core.pipeline import ExtractorPipeline
-from config.extractor_config import ExtractorConfig
+"""
+Punto de entrada principal para OpenTopologyC.
+Lanza la interfaz gráfica principal que permite acceder a:
+- Extractor de Features
+- Entrenamiento de Modelos
+"""
 
-
+from gui.main_gui import MainGUI
 
 
 def main():
-    gui = ExtractorGUI()
-    
-    gui.run()
-    # Cuando ya existe config_extractor.json:
-    cfg = ExtractorConfig.load_json("config_extractor.json")
-
-    pipeline = ExtractorPipeline(cfg)
-    pipeline.run()
+    """Inicia la aplicación OpenTopologyC"""
+    app = MainGUI()
+    app.run()
 
 
 if __name__ == "__main__":

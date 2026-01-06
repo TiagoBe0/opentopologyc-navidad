@@ -229,9 +229,9 @@ class ExtractorGUI:
         # Frame para botones secundarios
         secondary_buttons = ttk.Frame(section5)
         secondary_buttons.pack(fill="x", pady=(10, 0))
-        
-        ttk.Button(secondary_buttons, text="❌ Salir", 
-                  command=self.window.quit, width=20).pack(side="right")
+
+        ttk.Button(secondary_buttons, text="❌ Salir",
+                  command=self.window.destroy, width=20).pack(side="right")
         
         # --------------------------------------
         # SECCIÓN 6: ESTADO
@@ -478,7 +478,7 @@ class ExtractorGUI:
     # ---------------------------------------------------
     def run(self):
         # Configurar manejo de teclas
-        self.window.bind('<Escape>', lambda e: self.window.quit())
+        self.window.bind('<Escape>', lambda e: self.window.destroy())
         self.window.bind('<Return>', lambda e: self.run_pipeline() if self.run_button['state'] == 'normal' else None)
         
         # Centrar ventana

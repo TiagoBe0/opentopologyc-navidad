@@ -13,8 +13,8 @@ import warnings
 warnings.filterwarnings('ignore')
 
 # Agregar ruta al módulo train_step
-sys.path.append(str(Path(__file__).parent.parent.parent))
-from train_step import RandomForestTrainer
+sys.path.append(str(Path(__file__).parent.parent))
+from core.train_step import RandomForestTrainer
 
 
 class TrainingGUI:
@@ -197,7 +197,7 @@ class TrainingGUI:
         ttk.Button(
             buttons_frame,
             text="❌ Salir",
-            command=self.window.quit,
+            command=self.window.destroy,
             width=20
         ).pack(side="right", padx=5)
         
@@ -513,7 +513,7 @@ class TrainingGUI:
     def run(self):
         """Inicia la aplicación GUI"""
         # Configurar atajos de teclado
-        self.window.bind('<Escape>', lambda e: self.window.quit())
+        self.window.bind('<Escape>', lambda e: self.window.destroy())
         self.window.bind('<Control-o>', lambda e: self.select_csv_file())
         self.window.bind('<Control-s>', lambda e: self.select_output_dir())
         self.window.bind('<F5>', lambda e: self.train_model() if not self.running else None)
