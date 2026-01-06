@@ -34,11 +34,11 @@ class ExtractorWorker(QThread):
             pipeline = ExtractorPipeline(self.config)
 
             self.log_message.emit(f"📂 Directorio: {self.config.input_dir}\n")
-            self.log_message.emit(f"⚙️ Probe radius: {self.config.probe_radius}\n")
-            self.log_message.emit(f"⚙️ Ghost layers: {self.config.num_ghost_layers}\n")
+            self.log_message.emit(f"⚙️ Probe radius: {self.config.probe_radius} Å\n")
             self.log_message.emit(f"⚙️ Total atoms: {self.config.total_atoms}\n")
-            self.log_message.emit(f"⚙️ a0: {self.config.a0}\n")
-            self.log_message.emit(f"⚙️ Lattice: {self.config.lattice_type}\n\n")
+            self.log_message.emit(f"⚙️ a0: {self.config.a0} Å\n")
+            self.log_message.emit(f"⚙️ Lattice: {self.config.lattice_type}\n")
+            self.log_message.emit(f"⚙️ Método: ConstructSurfaceModifier (OVITO)\n\n")
 
             # Ejecutar pipeline
             df = pipeline.run()
@@ -60,7 +60,7 @@ class ExtractorWorker(QThread):
 
 class ExtractorGUIQt(BaseWindow):
     def __init__(self):
-        super().__init__("OpenTopologyC - Extractor de Features", (700, 700))
+        super().__init__("OpenTopologyC - Extractor de Features", (700, 650))
         self.input_dir = ""
         self.worker = None
         self._build_ui()
@@ -82,26 +82,21 @@ class ExtractorGUIQt(BaseWindow):
         layout.addWidget(btn_input)
         layout.addWidget(self.lbl_input)
 
-        # -------- ALPHA SHAPE PARAMS --------
-        alpha_group = QGroupBox("Parámetros Alpha Shape")
-        alpha_layout = QVBoxLayout()
+        # -------- SURFACE PARAMS --------
+        surface_group = QGroupBox("Parámetros de Superficie (OVITO)")
+        surface_layout = QVBoxLayout()
 
         self.spin_probe = QDoubleSpinBox()
         self.spin_probe.setValue(2.0)
         self.spin_probe.setSingleStep(0.2)
         self.spin_probe.setRange(0.1, 10.0)
 
-        self.spin_ghost = QSpinBox()
-        self.spin_ghost.setRange(1, 5)
-        self.spin_ghost.setValue(2)
+        surface_layout.addWidget(QLabel("Probe radius (Å):"))
+        surface_layout.addWidget(self.spin_probe)
+        surface_layout.addWidget(QLabel("(Usa ConstructSurfaceModifier de OVITO)"))
 
-        alpha_layout.addWidget(QLabel("Probe radius:"))
-        alpha_layout.addWidget(self.spin_probe)
-        alpha_layout.addWidget(QLabel("Ghost layers:"))
-        alpha_layout.addWidget(self.spin_ghost)
-
-        alpha_group.setLayout(alpha_layout)
-        layout.addWidget(alpha_group)
+        surface_group.setLayout(surface_layout)
+        layout.addWidget(surface_group)
 
         # -------- MATERIAL PARAMS --------
         material_group = QGroupBox("Parámetros del Material")
@@ -189,7 +184,6 @@ class ExtractorGUIQt(BaseWindow):
         config = ExtractorConfig(
             input_dir=self.input_dir,
             probe_radius=self.spin_probe.value(),
-            num_ghost_layers=self.spin_ghost.value(),
             total_atoms=self.spin_total_atoms.value(),
             a0=self.spin_a0.value(),
             lattice_type="fcc",  # Por ahora fijo
@@ -200,6 +194,11 @@ class ExtractorGUIQt(BaseWindow):
             compute_entropy_features=self.chk_entropy.isChecked(),
             compute_clustering_features=self.chk_clustering.isChecked()
         )
+
+        # NOTA: num_ghost_layers no va en ExtractorConfig
+        # Se usa directamente en SurfaceExtractor, que lo toma del mismo config
+        # Por ahora, el valor de ghost layers se ignora en esta GUI
+        # TODO: Agregar num_ghost_layers a ExtractorConfig si es necesario
 
         # Limpiar log
         self.log.clear()

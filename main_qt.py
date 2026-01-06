@@ -12,6 +12,13 @@ Lanza la interfaz gráfica Qt que permite acceder a:
 
 import sys
 from pathlib import Path
+import warnings
+
+# Suprimir warnings de incompatibilidad Qt5/Qt6 de OVITO
+# OVITO usa Qt6 pero esta aplicación usa PyQt5
+# Ambos pueden coexistir aunque haya warnings
+warnings.filterwarnings('ignore', message='.*OVITO.*PyPI')
+warnings.filterwarnings('ignore', message='.*Incompatible version of the Qt.*')
 
 # Agregar el directorio raíz al PYTHONPATH
 root_dir = Path(__file__).parent
