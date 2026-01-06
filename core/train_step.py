@@ -47,9 +47,9 @@ class RandomForestTrainer:
         """
         self.random_state = random_state
         self.logger = logger or logging.getLogger(__name__)
-        
+
         # Atributos que se llenarán durante el entrenamiento
-        self.name_file=str('db_test_pequeña/model_rf.pkl')
+        self.name_file = None
         self.pipeline = None
         self.model = None
         self.X_train = None
@@ -65,18 +65,19 @@ class RandomForestTrainer:
     def load_data(self, csv_path):
         """
         Carga el dataset y separa features del target.
-        
+
         Args:
             csv_path: Ruta al archivo CSV
-            
+
         Returns:
             tuple: (X, y) donde X son features e y es el target
-            
+
         Raises:
             ValueError: Si no se encuentra 'n_vacancies' en el dataset
         """
-        self.logger.info(f"📂 Cargando dataset: {self.name_file}")
-        df = pd.read_csv(self.name_file, index_col='file')
+        self.name_file = csv_path
+        self.logger.info(f"📂 Cargando dataset: {csv_path}")
+        df = pd.read_csv(csv_path, index_col='file')
         
         self.logger.info(f"   Muestras: {df.shape[0]} | Columnas: {df.shape[1]}")
         
