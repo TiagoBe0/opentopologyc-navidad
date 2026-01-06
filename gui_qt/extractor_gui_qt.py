@@ -1,68 +1,48 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
+"""
+Extractor GUI - OpenTopologyC
+
+IMPORTANTE: Este módulo NO usa QThread porque OVITO no es thread-safe con PyQt5.
+Usar QThread causa Segmentation Fault cuando OVITO intenta acceder a recursos Qt.
+
+Solución implementada:
+- QTimer para procesar archivos uno por uno
+- QApplication.processEvents() para mantener UI responsive
+- Todo se ejecuta en el main thread de Qt
+
+Ver: https://www.ovito.org/docs/current/python/introduction/running.html#thread-safety
+"""
+
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QPushButton, QLabel,
     QFileDialog, QMessageBox, QGroupBox,
     QSpinBox, QDoubleSpinBox, QTextEdit,
-    QProgressDialog, QCheckBox
+    QProgressBar, QCheckBox, QApplication
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtCore import Qt, QTimer
 
 from gui_qt.base_window import BaseWindow
 from core.pipeline import ExtractorPipeline
 from config.extractor_config import ExtractorConfig
-
-
-class ExtractorWorker(QThread):
-    """Worker thread para extraer features sin bloquear la UI"""
-
-    # Señales
-    log_message = pyqtSignal(str)  # Mensajes de log
-    finished = pyqtSignal(str)  # Ruta del CSV generado
-    error = pyqtSignal(str)  # Error message
-
-    def __init__(self, config):
-        super().__init__()
-        self.config = config
-
-    def run(self):
-        """Ejecuta la extracción en thread separado"""
-        try:
-            self.log_message.emit("🔬 Iniciando pipeline de extracción...\n")
-
-            pipeline = ExtractorPipeline(self.config)
-
-            self.log_message.emit(f"📂 Directorio: {self.config.input_dir}\n")
-            self.log_message.emit(f"⚙️ Probe radius: {self.config.probe_radius} Å\n")
-            self.log_message.emit(f"⚙️ Total atoms: {self.config.total_atoms}\n")
-            self.log_message.emit(f"⚙️ a0: {self.config.a0} Å\n")
-            self.log_message.emit(f"⚙️ Lattice: {self.config.lattice_type}\n")
-            self.log_message.emit(f"⚙️ Método: ConstructSurfaceModifier (OVITO)\n\n")
-
-            # Ejecutar pipeline
-            df = pipeline.run()
-
-            if df is not None:
-                output_csv = f"{self.config.input_dir}/dataset_features.csv"
-                self.log_message.emit(f"\n✅ Extracción completada!\n")
-                self.log_message.emit(f"📊 Muestras procesadas: {len(df)}\n")
-                self.log_message.emit(f"💾 CSV guardado: {output_csv}\n")
-                self.finished.emit(output_csv)
-            else:
-                self.error.emit("No se pudieron extraer features")
-
-        except Exception as e:
-            import traceback
-            error_msg = f"{str(e)}\n\n{traceback.format_exc()}"
-            self.error.emit(error_msg)
+from pathlib import Path
+import pandas as pd
 
 
 class ExtractorGUIQt(BaseWindow):
     def __init__(self):
-        super().__init__("OpenTopologyC - Extractor de Features", (700, 650))
+        super().__init__("OpenTopologyC - Extractor de Features", (700, 700))
         self.input_dir = ""
-        self.worker = None
+
+        # Pipeline y procesamiento
+        self.pipeline = None
+        self.files_to_process = []
+        self.current_file_index = 0
+        self.results = []
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.process_next_file)
+
         self._build_ui()
 
     # ======================================================
@@ -153,6 +133,15 @@ class ExtractorGUIQt(BaseWindow):
         self.btn_run.clicked.connect(self.run_extraction)
         layout.addWidget(self.btn_run)
 
+        # -------- PROGRESS BAR --------
+        self.progress_bar = QProgressBar()
+        self.progress_bar.setValue(0)
+        self.progress_bar.setTextVisible(True)
+        layout.addWidget(self.progress_bar)
+
+        self.lbl_progress = QLabel("")
+        layout.addWidget(self.lbl_progress)
+
         # -------- LOG --------
         self.log = QTextEdit()
         self.log.setReadOnly(True)
@@ -173,9 +162,10 @@ class ExtractorGUIQt(BaseWindow):
             self.lbl_input.setText(path)
 
     # ======================================================
-    # CORE
+    # CORE - PROCESAMIENTO SIN THREADING (OVITO no es thread-safe)
     # ======================================================
     def run_extraction(self):
+        """Inicia el proceso de extracción"""
         if not self.input_dir:
             QMessageBox.warning(self, "Error", "Debe seleccionar una carpeta de dumps")
             return
@@ -186,7 +176,7 @@ class ExtractorGUIQt(BaseWindow):
             probe_radius=self.spin_probe.value(),
             total_atoms=self.spin_total_atoms.value(),
             a0=self.spin_a0.value(),
-            lattice_type="fcc",  # Por ahora fijo
+            lattice_type="fcc",
             compute_grid_features=self.chk_grid.isChecked(),
             compute_hull_features=self.chk_hull.isChecked(),
             compute_inertia_features=self.chk_inertia.isChecked(),
@@ -195,58 +185,119 @@ class ExtractorGUIQt(BaseWindow):
             compute_clustering_features=self.chk_clustering.isChecked()
         )
 
-        # NOTA: num_ghost_layers no va en ExtractorConfig
-        # Se usa directamente en SurfaceExtractor, que lo toma del mismo config
-        # Por ahora, el valor de ghost layers se ignora en esta GUI
-        # TODO: Agregar num_ghost_layers a ExtractorConfig si es necesario
-
-        # Limpiar log
+        # Limpiar log y preparar UI
         self.log.clear()
+        self.log.append("🔬 Iniciando pipeline de extracción...\n")
+        self.log.append(f"📂 Directorio: {config.input_dir}\n")
+        self.log.append(f"⚙️ Probe radius: {config.probe_radius} Å\n")
+        self.log.append(f"⚙️ Total atoms: {config.total_atoms}\n")
+        self.log.append(f"⚙️ a0: {config.a0} Å\n")
+        self.log.append(f"⚙️ Lattice: {config.lattice_type}\n")
+        self.log.append(f"⚙️ Método: ConstructSurfaceModifier (OVITO)\n\n")
 
         # Deshabilitar botón
         self.btn_run.setEnabled(False)
         self.btn_run.setText("⏳ Procesando...")
 
-        # Crear y configurar worker
-        self.worker = ExtractorWorker(config)
-        self.worker.log_message.connect(self.on_log_message)
-        self.worker.finished.connect(self.on_extraction_finished)
-        self.worker.error.connect(self.on_extraction_error)
+        try:
+            # Crear pipeline
+            self.pipeline = ExtractorPipeline(config)
 
-        # Iniciar worker
-        self.worker.start()
+            # Obtener lista de archivos
+            input_dir = Path(config.input_dir)
+            self.files_to_process = sorted(
+                str(f) for f in input_dir.glob("*")
+                if not f.name.endswith("_surface_normalized.dump")
+            )
 
-    def on_log_message(self, message):
-        """Agrega mensaje al log"""
-        self.log.append(message)
+            if not self.files_to_process:
+                self.log.append(f"❌ No se encontraron archivos en: {input_dir}\n")
+                self.btn_run.setEnabled(True)
+                self.btn_run.setText("🚀 Extraer Features")
+                return
 
-    def on_extraction_finished(self, csv_path):
-        """Llamado cuando la extracción termina exitosamente"""
+            self.log.append(f"📋 Archivos encontrados: {len(self.files_to_process)}\n\n")
+
+            # Inicializar procesamiento
+            self.current_file_index = 0
+            self.results = []
+            self.progress_bar.setMaximum(len(self.files_to_process))
+            self.progress_bar.setValue(0)
+
+            # Iniciar timer para procesar archivos
+            self.timer.start(10)  # Procesa cada 10ms
+
+        except Exception as e:
+            import traceback
+            error_msg = f"{str(e)}\n\n{traceback.format_exc()}"
+            self.log.append(f"\n❌ ERROR:\n{error_msg}\n")
+            self.btn_run.setEnabled(True)
+            self.btn_run.setText("🚀 Extraer Features")
+            QMessageBox.critical(self, "Error", f"Error al iniciar extracción:\n\n{str(e)}")
+
+    def process_next_file(self):
+        """Procesa el siguiente archivo (llamado por QTimer)"""
+        if self.current_file_index >= len(self.files_to_process):
+            # Terminamos todos los archivos
+            self.timer.stop()
+            self.on_extraction_complete()
+            return
+
+        file_path = self.files_to_process[self.current_file_index]
+        file_name = Path(file_path).name
+
+        try:
+            # Actualizar UI
+            self.lbl_progress.setText(f"Procesando: {file_name}")
+            self.progress_bar.setValue(self.current_file_index)
+            QApplication.processEvents()  # Mantener UI responsive
+
+            # Procesar archivo
+            self.log.append(f"[{self.current_file_index + 1}/{len(self.files_to_process)}] {file_name}...")
+            QApplication.processEvents()
+
+            result = self.pipeline.process_single(file_path)
+
+            if result is not None:
+                self.results.append(result)
+                self.log.append(" ✓\n")
+            else:
+                self.log.append(" ✗ (error)\n")
+
+            QApplication.processEvents()
+
+        except Exception as e:
+            self.log.append(f" ✗ ERROR: {str(e)}\n")
+            QApplication.processEvents()
+
+        # Avanzar al siguiente archivo
+        self.current_file_index += 1
+
+    def on_extraction_complete(self):
+        """Llamado cuando se completa la extracción de todos los archivos"""
+        self.progress_bar.setValue(len(self.files_to_process))
+        self.lbl_progress.setText("Completado")
+
+        if self.results:
+            # Guardar CSV
+            df = pd.DataFrame(self.results)
+            output_csv = f"{self.input_dir}/dataset_features.csv"
+            df.to_csv(output_csv, index=False)
+
+            self.log.append(f"\n✅ Extracción completada!\n")
+            self.log.append(f"📊 Muestras procesadas: {len(df)}\n")
+            self.log.append(f"💾 CSV guardado: {output_csv}\n")
+
+            QMessageBox.information(
+                self,
+                "Éxito",
+                f"Extracción completada!\n\nMuestras procesadas: {len(df)}\nCSV generado:\n{output_csv}"
+            )
+        else:
+            self.log.append(f"\n❌ No se pudieron procesar archivos\n")
+            QMessageBox.warning(self, "Advertencia", "No se pudieron procesar archivos")
+
+        # Habilitar botón
         self.btn_run.setEnabled(True)
         self.btn_run.setText("🚀 Extraer Features")
-
-        QMessageBox.information(
-            self,
-            "Éxito",
-            f"Extracción completada!\n\nCSV generado:\n{csv_path}"
-        )
-
-        # Limpiar worker
-        self.worker = None
-
-    def on_extraction_error(self, error_msg):
-        """Llamado cuando ocurre un error"""
-        self.btn_run.setEnabled(True)
-        self.btn_run.setText("🚀 Extraer Features")
-
-        self.log.append(f"\n❌ ERROR:\n{error_msg}\n")
-
-        QMessageBox.critical(
-            self,
-            "Error",
-            f"Error durante la extracción:\n\n{error_msg}"
-        )
-
-        # Limpiar worker
-        self.worker = None
 

@@ -81,6 +81,18 @@ opentopologyc-navidad/
 pip install PyQt5
 ```
 
+### Error: Segmentation Fault en Extractor
+**Descripción:** La aplicación se cierra con "Violación de segmento" al procesar dumps.
+
+**Causa:** OVITO no es thread-safe con PyQt5. Usar QThread causa crashes.
+
+**Solución:** Este error ya fue corregido. Haz pull de la rama:
+```bash
+git pull origin claude/integrate-gui-windows-D2Jbi
+```
+
+**Nota técnica:** El extractor ahora usa QTimer + QApplication.processEvents() en lugar de QThread para mantener la UI responsive sin causar conflictos con OVITO.
+
 ### Error: "TypeError: __init__() got an unexpected keyword argument 'num_ghost_layers'"
 **Solución:** Este error ya fue corregido. Haz pull de la rama:
 ```bash
