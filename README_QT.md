@@ -81,11 +81,26 @@ opentopologyc-navidad/
 pip install PyQt5
 ```
 
-### Error: "invalid literal for int()"
+### Error: "TypeError: __init__() got an unexpected keyword argument 'num_ghost_layers'"
 **Solución:** Este error ya fue corregido. Haz pull de la rama:
 ```bash
 git pull origin claude/integrate-gui-windows-D2Jbi
 ```
+
+### Warning: "Incompatible version of the Qt cross-platform framework detected!"
+**Descripción:** OVITO usa Qt6 (PySide6) pero esta aplicación usa PyQt5. Ambos pueden coexistir sin problemas.
+
+**Estado:** Los warnings están suprimidos automáticamente en `main_qt.py`.
+
+**Opción avanzada (migrar a Qt6):**
+Si quieres eliminar completamente el warning, puedes migrar la aplicación a PyQt6:
+```bash
+pip uninstall PyQt5
+pip install PyQt6
+# Luego cambiar imports en el código: PyQt5 → PyQt6
+```
+
+**Nota:** No es necesario migrar. La aplicación funciona correctamente con PyQt5 + OVITO Qt6.
 
 ## 📊 Flujo de Trabajo Típico
 
