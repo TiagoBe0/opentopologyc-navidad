@@ -390,76 +390,74 @@ class ExtractorGUI:
             messagebox.showerror("Error", f"Error al cargar configuración: {str(e)}")
 
     def run_pipeline(self):
-        """Ejecutar el pipeline en un hilo separado"""
+        """Ejecutar el pipeline directamente en el hilo principal"""
         if self.running:
             return
-        
+
         # Verificar que existe configuración
         if not os.path.exists("config_extractor.json"):
             messagebox.showerror("Error", "Primero debe crear o cargar una configuración")
             return
-        
+
         # Verificar que el pipeline está disponible
         if ExtractorPipeline is None:
             messagebox.showerror("Error", "No se puede cargar el módulo ExtractorPipeline")
             return
-        
-        # Confirmar ejecución
+
+        # Confirmar ejecución con advertencia
         confirm = messagebox.askyesno(
             "Confirmar ejecución",
-            "¿Está seguro de ejecutar el pipeline? Esto puede tomar varios minutos."
+            "¿Está seguro de ejecutar el pipeline?\n\n"
+            "Esto puede tomar varios minutos.\n"
+            "La ventana puede no responder durante el proceso.\n\n"
+            "IMPORTANTE: No cierre la aplicación hasta que termine."
         )
-        
+
         if not confirm:
             return
-        
-        # Crear hilo para ejecutar pipeline
+
+        # Configurar estado de ejecución
         self.running = True
         self.run_button.config(state="disabled", text="Ejecutando...")
-        self.update_status("Ejecutando pipeline...")
+        self.update_status("⏳ Ejecutando pipeline... (La ventana puede no responder)")
         self.progress_bar.pack(side="right", padx=(10, 0))
         self.progress_bar.start()
-        
-        thread = threading.Thread(target=self._execute_pipeline, daemon=True)
-        thread.start()
+
+        # Forzar actualización de la GUI antes de empezar
+        self.window.update()
+
+        # Ejecutar pipeline después de un pequeño delay para que se actualice la GUI
+        self.window.after(100, self._execute_pipeline)
 
     def _execute_pipeline(self):
-        """Función que ejecuta el pipeline (en hilo separado)"""
+        """Función que ejecuta el pipeline directamente"""
         try:
             # Cargar configuración
             cfg = ExtractorConfig.load_json("config_extractor.json")
-            
+
             # Crear y ejecutar pipeline
             pipeline = ExtractorPipeline(cfg)
-            
-            # Actualizar GUI desde hilo principal
-            def update_success():
-                self.progress_bar.stop()
-                self.progress_bar.pack_forget()
-                self.update_status("✅ Pipeline ejecutado exitosamente")
-                self.run_button.config(state="normal", text="🚀 Run Pipeline")
-                self.running = False
-                messagebox.showinfo("Éxito", "Pipeline ejecutado exitosamente")
-            
-            # Ejecutar pipeline
+
+            # Ejecutar pipeline (directo, sin threading)
             result = pipeline.run()
-            
-            # Actualizar interfaz en hilo principal
-            self.window.after(0, update_success)
-            
+
+            # Actualizar interfaz
+            self.progress_bar.stop()
+            self.progress_bar.pack_forget()
+            self.update_status("✅ Pipeline ejecutado exitosamente")
+            self.run_button.config(state="normal", text="🚀 Run Pipeline")
+            self.running = False
+            messagebox.showinfo("Éxito", "Pipeline ejecutado exitosamente!\n\nRevisa el archivo dataset_features.csv generado.")
+
         except Exception as error:
-            # Manejar errores en hilo principal
+            # Manejar errores
             error_message = str(error)
-            
-            def update_error():
-                self.progress_bar.stop()
-                self.progress_bar.pack_forget()
-                self.update_status(f"❌ Error: {error_message}")
-                self.run_button.config(state="normal", text="🚀 Run Pipeline")
-                self.running = False
-                messagebox.showerror("Error", f"Error en pipeline: {error_message}")
-            
-            self.window.after(0, update_error)
+            self.progress_bar.stop()
+            self.progress_bar.pack_forget()
+            self.update_status(f"❌ Error: {error_message}")
+            self.run_button.config(state="normal", text="🚀 Run Pipeline")
+            self.running = False
+            messagebox.showerror("Error", f"Error en pipeline:\n{error_message}")
 
     def update_status(self, message):
         """Actualizar mensaje de estado"""
