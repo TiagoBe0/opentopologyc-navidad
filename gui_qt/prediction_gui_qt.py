@@ -181,7 +181,7 @@ class PredictionGUIQt(BaseWindow):
     # ======================================================
     def load_dump(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "Seleccionar dump", "", "Dump (*.dump)"
+            self, "Seleccionar dump", "", "Dump files (*.dump);;All files (*)"
         )
         if path:
             self.dump_path = path
