@@ -174,10 +174,23 @@ class PredictionPipeline:
                     clustering_params = {"n_clusters": 5, "linkage": "ward"}
                 elif clustering_method == "HDBSCAN":
                     clustering_params = {"min_cluster_size": 10, "min_samples": None}
+                elif clustering_method == "Hierarchical":
+                    clustering_params = {
+                        "min_atoms": 30,
+                        "max_iterations": 4,
+                        "silhouette_threshold": 0.3,
+                        "davies_bouldin_threshold": 1.5,
+                        "dispersion_threshold": 5.0,
+                        "quantile": 0.2
+                    }
+
+            # Determinar si usar clustering jerárquico
+            use_hierarchical = clustering_method == "Hierarchical"
 
             labels, cluster_info = cluster_surface_atoms(
                 positions=positions,
                 method=clustering_method,
+                hierarchical=use_hierarchical,
                 **clustering_params
             )
 

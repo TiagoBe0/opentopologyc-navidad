@@ -117,7 +117,7 @@ class PredictionGUIQt(BaseWindow):
 
         self.chk_cluster = QCheckBox("Aplicar clustering")
         self.cmb_method = QComboBox()
-        self.cmb_method.addItems(["KMeans", "MeanShift", "Aglomerativo", "HDBSCAN"])
+        self.cmb_method.addItems(["KMeans", "MeanShift", "Aglomerativo", "HDBSCAN", "Hierarchical"])
 
         self.spin_clusters = QSpinBox()
         self.spin_clusters.setRange(2, 20)
@@ -126,7 +126,8 @@ class PredictionGUIQt(BaseWindow):
         cl.addWidget(self.chk_cluster)
         cl.addWidget(QLabel("Método"))
         cl.addWidget(self.cmb_method)
-        cl.addWidget(QLabel("N clusters"))
+        cl.addWidget(QLabel("N clusters (ignorado en Hierarchical)"))
+        self.spin_clusters.setToolTip("Para Hierarchical, se determina automáticamente por métricas")
         cl.addWidget(self.spin_clusters)
 
         cluster_box.setLayout(cl)
@@ -226,9 +227,24 @@ class PredictionGUIQt(BaseWindow):
             )
 
             # Preparar parámetros de clustering
+            clustering_method = self.cmb_method.currentText()
             clustering_params = None
+
             if self.chk_cluster.isChecked():
-                clustering_params = {'n_clusters': self.spin_clusters.value()}
+                # Parámetros específicos según el método
+                if clustering_method == "Hierarchical":
+                    # Clustering jerárquico usa parámetros diferentes
+                    clustering_params = {
+                        'min_atoms': 30,  # Mínimo de átomos por cluster final
+                        'max_iterations': 4,  # Máximo de niveles de recursión
+                        'silhouette_threshold': 0.3,  # Umbral de Silhouette
+                        'davies_bouldin_threshold': 1.5,  # Umbral de Davies-Bouldin
+                        'dispersion_threshold': 5.0,  # Umbral de dispersión
+                        'quantile': 0.2  # Quantile para bandwidth estimation
+                    }
+                else:
+                    # Otros métodos usan n_clusters
+                    clustering_params = {'n_clusters': self.spin_clusters.value()}
 
             # Preparar parámetros para el worker
             params = {
@@ -236,7 +252,7 @@ class PredictionGUIQt(BaseWindow):
                 'probe_radius': self.spin_probe.value(),
                 'num_ghost_layers': self.spin_ghost.value(),
                 'apply_clustering': self.chk_cluster.isChecked(),
-                'clustering_method': self.cmb_method.currentText(),
+                'clustering_method': clustering_method,
                 'clustering_params': clustering_params,
                 'target_cluster': 'largest'
             }

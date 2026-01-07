@@ -5,6 +5,7 @@
 """
 Motor de clustering para agrupar átomos superficiales de nanoporos
 Soporta múltiples algoritmos: KMeans, MeanShift, Aglomerativo, HDBSCAN
+Incluye clustering jerárquico basado en métricas de calidad
 """
 
 import numpy as np
@@ -20,6 +21,14 @@ try:
     HDBSCAN_AVAILABLE = True
 except ImportError:
     HDBSCAN_AVAILABLE = False
+
+# Importar clustering jerárquico mejorado
+try:
+    from core.hierarchical_clustering import apply_hierarchical_clustering, HierarchicalMeanShiftClusterer
+    HIERARCHICAL_AVAILABLE = True
+except ImportError:
+    HIERARCHICAL_AVAILABLE = False
+    print("Warning: Clustering jerárquico mejorado no disponible")
 
 
 class ClusteringEngine:
@@ -369,19 +378,73 @@ class RecursiveClusteringEngine:
 def cluster_surface_atoms(positions: np.ndarray,
                          method: str = "KMeans",
                          recursive: bool = False,
+                         hierarchical: bool = False,
                          **kwargs) -> Tuple[np.ndarray, Dict[str, Any]]:
     """
     Función conveniente para clusterizar átomos superficiales
 
     Args:
         positions: Array Nx3 de posiciones
-        method: Método de clustering
-        recursive: Si True, usa clustering recursivo
+        method: Método de clustering ("KMeans", "MeanShift", "Aglomerativo", "HDBSCAN", "Hierarchical")
+        recursive: Si True, usa clustering recursivo básico (por tamaño)
+        hierarchical: Si True, usa clustering jerárquico mejorado (por métricas)
         **kwargs: Parámetros adicionales
 
     Returns:
         Tuple (labels, info_dict)
     """
+    # NUEVO: Clustering jerárquico mejorado basado en métricas
+    if hierarchical or method == "Hierarchical":
+        if not HIERARCHICAL_AVAILABLE:
+            raise ImportError("Clustering jerárquico no disponible. Verifica hierarchical_clustering.py")
+
+        # Extraer parámetros específicos del clustering jerárquico
+        min_atoms = kwargs.get('min_atoms', 50)
+        max_iterations = kwargs.get('max_iterations', 5)
+        n_clusters_per_level = kwargs.get('n_clusters_per_level', None)
+        silhouette_threshold = kwargs.get('silhouette_threshold', 0.3)
+        davies_bouldin_threshold = kwargs.get('davies_bouldin_threshold', 1.5)
+        dispersion_threshold = kwargs.get('dispersion_threshold', None)
+        quantile = kwargs.get('quantile', 0.2)
+        atom_indices = kwargs.get('atom_indices', None)
+
+        # Aplicar clustering jerárquico
+        final_clusters, viz_data = apply_hierarchical_clustering(
+            positions=positions,
+            min_atoms=min_atoms,
+            max_iterations=max_iterations,
+            n_clusters_per_level=n_clusters_per_level,
+            silhouette_threshold=silhouette_threshold,
+            davies_bouldin_threshold=davies_bouldin_threshold,
+            dispersion_threshold=dispersion_threshold,
+            quantile=quantile,
+            atom_indices=atom_indices
+        )
+
+        # Crear labels sintéticos para compatibilidad
+        labels = np.zeros(len(positions), dtype=int)
+        for cluster_data in final_clusters:
+            cluster_id = cluster_data['cluster_id']
+            cluster_positions = cluster_data['positions']
+
+            # Encontrar índices correspondientes
+            for i, pos in enumerate(positions):
+                for cluster_pos in cluster_positions:
+                    if np.allclose(pos, cluster_pos, atol=1e-6):
+                        labels[i] = cluster_id
+                        break
+
+        info = {
+            'method': 'Hierarchical',
+            'n_clusters': len(final_clusters),
+            'clusters_data': final_clusters,
+            'visualization_data': viz_data,
+            'hierarchical': True
+        }
+
+        return labels, info
+
+    # Clustering recursivo básico (por tamaño)
     if recursive:
         engine = RecursiveClusteringEngine(positions, method, **kwargs)
         max_cluster_size = kwargs.pop('max_cluster_size', 5000)
@@ -395,6 +458,8 @@ def cluster_surface_atoms(positions: np.ndarray,
         }
 
         return engine.final_labels, info
+
+    # Clustering estándar (no recursivo)
     else:
         engine = ClusteringEngine(positions, method, **kwargs)
         n_clusters = engine.apply_clustering()
