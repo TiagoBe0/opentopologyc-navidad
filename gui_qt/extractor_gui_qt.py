@@ -73,6 +73,24 @@ class ExtractorGUIQt(BaseWindow):
 
         surface_layout.addWidget(QLabel("Probe radius (Å):"))
         surface_layout.addWidget(self.spin_probe)
+
+        # Checkbox para método de distancia a superficie
+        self.chk_surface_distance = QCheckBox("Usar Surface Distance (método alternativo)")
+        self.chk_surface_distance.setChecked(False)
+        self.chk_surface_distance.toggled.connect(self.toggle_surface_distance)
+        surface_layout.addWidget(self.chk_surface_distance)
+
+        # SpinBox para surface distance value (deshabilitado por defecto)
+        self.spin_surface_distance = QDoubleSpinBox()
+        self.spin_surface_distance.setValue(2.0)
+        self.spin_surface_distance.setSingleStep(0.1)
+        self.spin_surface_distance.setRange(0.1, 10.0)
+        self.spin_surface_distance.setDecimals(2)
+        self.spin_surface_distance.setEnabled(False)
+
+        surface_layout.addWidget(QLabel("  Surface Distance Value (Å):"))
+        surface_layout.addWidget(self.spin_surface_distance)
+
         surface_layout.addWidget(QLabel("(Usa ConstructSurfaceModifier de OVITO)"))
 
         surface_group.setLayout(surface_layout)
@@ -161,6 +179,10 @@ class ExtractorGUIQt(BaseWindow):
             self.input_dir = path
             self.lbl_input.setText(path)
 
+    def toggle_surface_distance(self, checked):
+        """Habilita/deshabilita el spinbox de surface distance"""
+        self.spin_surface_distance.setEnabled(checked)
+
     # ======================================================
     # CORE - PROCESAMIENTO SIN THREADING (OVITO no es thread-safe)
     # ======================================================
@@ -174,6 +196,8 @@ class ExtractorGUIQt(BaseWindow):
         config = ExtractorConfig(
             input_dir=self.input_dir,
             probe_radius=self.spin_probe.value(),
+            surface_distance=self.chk_surface_distance.isChecked(),
+            surface_distance_value=self.spin_surface_distance.value(),
             total_atoms=self.spin_total_atoms.value(),
             a0=self.spin_a0.value(),
             lattice_type="fcc",
@@ -190,10 +214,32 @@ class ExtractorGUIQt(BaseWindow):
         self.log.append("🔬 Iniciando pipeline de extracción...\n")
         self.log.append(f"📂 Directorio: {config.input_dir}\n")
         self.log.append(f"⚙️ Probe radius: {config.probe_radius} Å\n")
+
+        if config.surface_distance:
+            self.log.append(f"⚙️ Método: Surface Distance ({config.surface_distance_value} Å)\n")
+        else:
+            self.log.append(f"⚙️ Método: Surface Selection (default)\n")
+
         self.log.append(f"⚙️ Total atoms: {config.total_atoms}\n")
         self.log.append(f"⚙️ a0: {config.a0} Å\n")
         self.log.append(f"⚙️ Lattice: {config.lattice_type}\n")
-        self.log.append(f"⚙️ Método: ConstructSurfaceModifier (OVITO)\n\n")
+
+        # Mostrar features activas
+        features_active = []
+        if config.compute_grid_features:
+            features_active.append("Grid")
+        if config.compute_hull_features:
+            features_active.append("Hull")
+        if config.compute_inertia_features:
+            features_active.append("Inertia")
+        if config.compute_radial_features:
+            features_active.append("Radial")
+        if config.compute_entropy_features:
+            features_active.append("Entropy")
+        if config.compute_clustering_features:
+            features_active.append("Clustering")
+
+        self.log.append(f"✓ Features: {', '.join(features_active)}\n\n")
 
         # Deshabilitar botón
         self.btn_run.setEnabled(False)
