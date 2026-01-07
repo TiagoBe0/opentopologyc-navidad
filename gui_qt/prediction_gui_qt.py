@@ -607,6 +607,9 @@ class PredictionGUIQt(BaseWindow):
         normalizer = PositionNormalizer(scale_factor=config.a0)
         extractor = FeatureExtractor(config)
 
+        # Normalizar todas las posiciones filtradas una vez para obtener el box_size de referencia
+        all_pos_norm, reference_box_size, _ = normalizer.normalize(self.filtered_positions)
+
         # Obtener clusters únicos (excluyendo ruido si existe)
         unique_labels = np.unique(self.clustering_labels)
         clusters_to_process = [lbl for lbl in unique_labels if lbl != -1]
@@ -621,12 +624,19 @@ class PredictionGUIQt(BaseWindow):
             cluster_positions = self.filtered_positions[mask]
             n_atoms_cluster = len(cluster_positions)
 
-            # Extraer features para este cluster
-            pos_norm, box_size, _ = normalizer.normalize(cluster_positions)
+            # Saltar clusters muy pequeños (menos de 10 átomos)
+            if n_atoms_cluster < 10:
+                print(f"⚠️ Cluster {cluster_id} tiene solo {n_atoms_cluster} átomos, se omite.")
+                continue
 
+            # Normalizar el cluster con el mismo scale_factor
+            pos_norm, _, _ = normalizer.normalize(cluster_positions)
+
+            # IMPORTANTE: Usar el reference_box_size de toda la muestra, no el del cluster individual
+            # Esto asegura que las features sean comparables con el entrenamiento
             features = {}
             if config.compute_grid_features:
-                features.update(extractor.grid_features(pos_norm, box_size))
+                features.update(extractor.grid_features(pos_norm, reference_box_size))
             if config.compute_inertia_features:
                 features.update(extractor.inertia_feature(cluster_positions))
             if config.compute_radial_features:
@@ -646,14 +656,18 @@ class PredictionGUIQt(BaseWindow):
             ]
             X = df.drop(columns=[c for c in forbidden if c in df.columns], errors="ignore")
 
-            cluster_pred = model.predict(X)[0]
-            total_prediction += cluster_pred
+            try:
+                cluster_pred = model.predict(X)[0]
+                total_prediction += cluster_pred
 
-            cluster_predictions.append({
-                'cluster_id': cluster_id,
-                'n_atoms': n_atoms_cluster,
-                'prediction': cluster_pred
-            })
+                cluster_predictions.append({
+                    'cluster_id': cluster_id,
+                    'n_atoms': n_atoms_cluster,
+                    'prediction': cluster_pred
+                })
+            except Exception as e:
+                print(f"⚠️ Error al predecir cluster {cluster_id}: {str(e)}")
+                continue
 
         # Calcular vacancias reales
         n_atoms_real = len(self.original_dump_data['positions'])
@@ -662,7 +676,11 @@ class PredictionGUIQt(BaseWindow):
 
         # Construir mensaje detallado
         msg = f"🎯 Predicción Completada (Con Clustering)\n\n"
-        msg += f"📊 Total de Clusters: {len(clusters_to_process)}\n"
+        msg += f"📊 Clusters totales: {len(clusters_to_process)}\n"
+        msg += f"✓ Clusters procesados: {len(cluster_predictions)}\n"
+        if len(cluster_predictions) < len(clusters_to_process):
+            omitidos = len(clusters_to_process) - len(cluster_predictions)
+            msg += f"⚠️ Clusters omitidos: {omitidos} (muy pequeños o con errores)\n"
         msg += f"━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
 
         msg += "Predicción por Cluster:\n"
