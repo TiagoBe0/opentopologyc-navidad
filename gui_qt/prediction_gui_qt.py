@@ -214,7 +214,7 @@ class PredictionGUIQt(BaseWindow):
 
         step2_layout.addWidget(QLabel("N clusters (ignorado en Hierarchical):"))
         self.spin_clusters = QSpinBox()
-        self.spin_clusters.setRange(2, 20)
+        self.spin_clusters.setRange(1, 1000)
         self.spin_clusters.setValue(5)
         step2_layout.addWidget(self.spin_clusters)
 
@@ -237,12 +237,6 @@ class PredictionGUIQt(BaseWindow):
         step3_layout = QVBoxLayout()
 
         # Parámetros del material
-        step3_layout.addWidget(QLabel("Átomos totales (cristal perfecto):"))
-        self.spin_total_atoms = QSpinBox()
-        self.spin_total_atoms.setRange(100, 100000)
-        self.spin_total_atoms.setValue(16384)
-        step3_layout.addWidget(self.spin_total_atoms)
-
         step3_layout.addWidget(QLabel("Parámetro de red a0 (Å):"))
         self.spin_a0 = QDoubleSpinBox()
         self.spin_a0.setValue(3.532)
@@ -461,6 +455,49 @@ class PredictionGUIQt(BaseWindow):
         QMessageBox.critical(self, "Error en Paso 2", f"Error al aplicar clustering:\n{error_msg}")
 
     # ======================================================
+    # CÁLCULO DE ÁTOMOS TOTALES
+    # ======================================================
+    def _calculate_total_atoms(self, box_bounds, a0, lattice_type):
+        """
+        Calcula el número de átomos en un cristal perfecto
+
+        Args:
+            box_bounds: Lista de tuplas [(xlo, xhi), (ylo, yhi), (zlo, zhi)]
+            a0: Parámetro de red en Angstroms
+            lattice_type: Tipo de red ('fcc', 'bcc', 'hcp', 'diamond', 'sc')
+
+        Returns:
+            Número de átomos totales en cristal perfecto
+        """
+        # Calcular volumen de la caja
+        lx = box_bounds[0][1] - box_bounds[0][0]
+        ly = box_bounds[1][1] - box_bounds[1][0]
+        lz = box_bounds[2][1] - box_bounds[2][0]
+        volume_box = lx * ly * lz
+
+        # Volumen de celda unitaria (cúbica)
+        volume_cell = a0 ** 3
+
+        # Número de átomos por celda según tipo de red
+        atoms_per_cell = {
+            'fcc': 4,
+            'bcc': 2,
+            'sc': 1,
+            'hcp': 2,  # Aproximación
+            'diamond': 8
+        }
+
+        n_atoms_cell = atoms_per_cell.get(lattice_type, 4)  # Default: fcc
+
+        # Número de celdas unitarias
+        n_cells = volume_box / volume_cell
+
+        # Átomos totales
+        total_atoms = int(n_cells * n_atoms_cell)
+
+        return total_atoms
+
+    # ======================================================
     # PASO 3: PREDICCIÓN
     # ======================================================
     def run_step3_prediction(self):
@@ -473,11 +510,19 @@ class PredictionGUIQt(BaseWindow):
             return
 
         try:
+            # Calcular total de átomos del cristal perfecto
+            box_bounds = self.original_dump_data['box_bounds']
+            total_atoms = self._calculate_total_atoms(
+                box_bounds,
+                self.spin_a0.value(),
+                self.combo_lattice.currentText()
+            )
+
             # Crear configuración
             config = ExtractorConfig(
                 input_dir=".",
                 probe_radius=self.spin_probe.value(),
-                total_atoms=self.spin_total_atoms.value(),
+                total_atoms=total_atoms,
                 a0=self.spin_a0.value(),
                 lattice_type=self.combo_lattice.currentText(),
                 compute_grid_features=True,
