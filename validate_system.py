@@ -116,7 +116,8 @@ def step2_train_model(csv_file):
         # NUEVO: ModelManager integrado
         use_model_manager=True,
         model_name="vacancy_rf",
-        model_version="1.0"
+        model_version="1.0",
+        target_column=None                 # Auto-detectar columna target
     )
 
     print(f"  n_estimators: {pipeline.n_estimators}")

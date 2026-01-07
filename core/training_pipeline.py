@@ -17,7 +17,8 @@ class TrainingPipeline:
         random_state=42,
         use_model_manager=True,
         model_name="vacancy_rf",
-        model_version="1.0"
+        model_version="1.0",
+        target_column=None  # Nuevo: columna target configurable
     ):
         self.csv_file = csv_file
         self.model_output = model_output
@@ -28,6 +29,7 @@ class TrainingPipeline:
         self.use_model_manager = use_model_manager
         self.model_name = model_name
         self.model_version = model_version
+        self.target_column = target_column
         self.model_manager = ModelManager() if use_model_manager else None
 
     # ======================================================
@@ -38,14 +40,70 @@ class TrainingPipeline:
 
         df = pd.read_csv(self.csv_file)
 
+        # Detectar columna target
+        target_col = self._detect_target_column(df)
+
         # Separar features y target
-        X = df.drop(columns=["label", "target", "file", "n_vacancies"], errors="ignore")
-        y = df["label"] if "label" in df else df["target"]
+        # Columnas a excluir de features (target y metadata)
+        exclude_cols = [target_col, "file", "num_points", "num_atoms_real"]
+
+        # Agregar aliases comunes de target a excluir
+        target_aliases = ["label", "target", "n_vacancies", "vacancies", "y"]
+        exclude_cols.extend([col for col in target_aliases if col in df.columns and col != target_col])
+
+        X = df.drop(columns=exclude_cols, errors="ignore")
+        y = df[target_col]
 
         # Obtener nombres de features
         feature_names = X.columns.tolist()
 
+        print(f"✓ Columna target detectada: '{target_col}'")
+        print(f"✓ Features a usar: {len(feature_names)}")
+
         return X.values, y.values, feature_names
+
+    def _detect_target_column(self, df):
+        """
+        Detecta automáticamente la columna target
+
+        Prioridad:
+        1. self.target_column (si fue especificado)
+        2. Columnas candidatas comunes
+        3. Error si no encuentra ninguna
+
+        Returns:
+            Nombre de la columna target
+        """
+        # Si se especificó explícitamente
+        if self.target_column:
+            if self.target_column in df.columns:
+                return self.target_column
+            else:
+                raise ValueError(
+                    f"Columna target especificada '{self.target_column}' no existe en el CSV.\n"
+                    f"Columnas disponibles: {list(df.columns)}"
+                )
+
+        # Buscar columnas candidatas (orden de prioridad)
+        candidates = ["n_vacancies", "label", "target", "vacancies", "y", "class"]
+
+        for candidate in candidates:
+            if candidate in df.columns:
+                return candidate
+
+        # Si no encuentra, mostrar error con columnas disponibles
+        raise ValueError(
+            f"No se encontró columna target en el CSV.\n"
+            f"Columnas disponibles: {list(df.columns)}\n\n"
+            f"Soluciones:\n"
+            f"1. Especificar columna target explícitamente:\n"
+            f"   pipeline = TrainingPipeline(..., target_column='tu_columna')\n\n"
+            f"2. Renombrar una columna a 'n_vacancies' o 'label':\n"
+            f"   import pandas as pd\n"
+            f"   df = pd.read_csv('{self.csv_file}')\n"
+            f"   df['label'] = df['tu_columna']  # Renombrar\n"
+            f"   df.to_csv('{self.csv_file}', index=False)\n"
+        )
 
     # ======================================================
     # TRAIN

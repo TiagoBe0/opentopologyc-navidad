@@ -49,7 +49,9 @@ TRAINING = {
     "n_estimators": 100,     # Número de árboles en Random Forest
     "max_depth": None,       # Profundidad máxima (None = sin límite)
     "test_size": 0.2,        # 20% para test
-    "model_version": "1.0"   # Versión del modelo
+    "model_version": "1.0",  # Versión del modelo
+    "target_column": None    # Columna target (None = auto-detectar)
+                             # Opciones comunes: "n_vacancies", "label", "target"
 }
 
 # ============================================================
@@ -122,15 +124,9 @@ def main():
     print("PASO 2: ENTRENANDO MODELO")
     print("-"*80)
 
-    # Verificar que el CSV tiene columna de labels
-    if 'label' not in df.columns and 'target' not in df.columns and 'n_vacancies' not in df.columns:
-        print("\n⚠ ADVERTENCIA: CSV no tiene columna 'label' o 'target'")
-        print("Necesitas agregar una columna que indique las vacancias para cada muestra.")
-        print("\nOpciones:")
-        print("  1. Agregar columna 'label' manualmente al CSV")
-        print("  2. Renombrar 'n_vacancies' a 'label'")
-        print("  3. El nombre del archivo puede indicar vacancias (ej: '3.6_vac' = 4 vacancias)")
-        return
+    # Nota: TrainingPipeline ahora detecta automáticamente la columna target
+    # Busca: n_vacancies, label, target, vacancies, y, class
+    # O puedes especificar TRAINING["target_column"] = "tu_columna"
 
     training_pipeline = TrainingPipeline(
         csv_file=csv_file,
@@ -140,7 +136,8 @@ def main():
         test_size=TRAINING["test_size"],
         use_model_manager=True,
         model_name="vacancy_rf",
-        model_version=TRAINING["model_version"]
+        model_version=TRAINING["model_version"],
+        target_column=TRAINING["target_column"]
     )
 
     print(f"\nRandom Forest:")

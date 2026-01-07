@@ -4,7 +4,7 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QPushButton, QLabel,
     QFileDialog, QMessageBox, QGroupBox,
-    QSpinBox, QTextEdit, QProgressBar
+    QSpinBox, QTextEdit, QProgressBar, QLineEdit
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 
@@ -21,12 +21,13 @@ class TrainingWorker(QThread):
     finished = pyqtSignal(str)
     error = pyqtSignal(str)
 
-    def __init__(self, csv_path, model_path, n_estimators, max_depth):
+    def __init__(self, csv_path, model_path, n_estimators, max_depth, target_column=None):
         super().__init__()
         self.csv_path = csv_path
         self.model_path = model_path
         self.n_estimators = n_estimators
         self.max_depth = max_depth
+        self.target_column = target_column
 
     def run(self):
         try:
@@ -36,6 +37,7 @@ class TrainingWorker(QThread):
                 model_output=self.model_path,
                 n_estimators=self.n_estimators,
                 max_depth=self.max_depth,
+                target_column=self.target_column,
             )
 
             def callback(step, total):
@@ -99,10 +101,16 @@ class TrainingGUIQt(BaseWindow):
         self.spin_depth.setRange(1, 50)
         self.spin_depth.setValue(10)
 
+        # Target column (opcional)
+        self.txt_target = QLineEdit()
+        self.txt_target.setPlaceholderText("(auto-detectar)")
+
         p.addWidget(QLabel("n_estimators"))
         p.addWidget(self.spin_estimators)
         p.addWidget(QLabel("max_depth"))
         p.addWidget(self.spin_depth)
+        p.addWidget(QLabel("Columna target (dejar vacío para auto-detectar)"))
+        p.addWidget(self.txt_target)
 
         params.setLayout(p)
         layout.addWidget(params)
@@ -156,11 +164,15 @@ class TrainingGUIQt(BaseWindow):
         self.log.clear()
         self.progress.setValue(0)
 
+        # Obtener columna target (None si está vacío)
+        target_col = self.txt_target.text().strip() or None
+
         self.worker = TrainingWorker(
             self.csv_path,
             self.model_path,
             self.spin_estimators.value(),
             self.spin_depth.value(),
+            target_col,
         )
 
         self.worker.log.connect(self.log.append)

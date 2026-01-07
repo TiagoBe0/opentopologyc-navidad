@@ -171,42 +171,59 @@ dump_con_10_vacancias.dump
 
 ## 🔧 Troubleshooting
 
-### Error: "CSV no tiene columna 'label'"
+### Columna Target (Vacancias)
 
-**Problema:** El dataset necesita saber cuántas vacancias tiene cada dump.
+**✅ Auto-detección implementada:** El sistema ahora detecta automáticamente la columna target.
 
-**Solución 1:** Agregar columna `label` al CSV
+**Columnas detectadas automáticamente (en orden de prioridad):**
+1. `n_vacancies`
+2. `label`
+3. `target`
+4. `vacancies`
+5. `y`
+6. `class`
+
+**Opción 1: Usar auto-detección (Recomendado)**
+
+Si tu CSV tiene alguna de estas columnas, el sistema la detectará automáticamente:
+
+```python
+# quick_train.py o validate_system.py
+pipeline = TrainingPipeline(
+    csv_file="dataset_features.csv",
+    # ... otros parámetros ...
+    target_column=None  # Auto-detectar
+)
+```
+
+**Opción 2: Especificar columna manualmente**
+
+Si tu columna tiene un nombre diferente:
+
+```python
+# En quick_train.py, cambiar:
+TRAINING = {
+    # ...
+    "target_column": "mi_columna_vacancias"  # Tu nombre personalizado
+}
+```
+
+**Opción 3: Desde GUI**
+
+1. Abrir ventana "Entrenamiento"
+2. En "Parámetros del modelo", ver campo "Columna target"
+3. Dejar vacío para auto-detectar, o escribir nombre de tu columna
+
+**Opción 4: Renombrar columna en CSV**
+
+Si prefieres renombrar tu columna:
 
 ```python
 import pandas as pd
 
 df = pd.read_csv("dataset_features.csv")
-
-# Si 'n_vacancies' existe, renombrar:
-df['label'] = df['n_vacancies']
-
-# O agregar manualmente:
-# df['label'] = [0, 1, 2, 3, ...]  # Según tus dumps
-
+df['n_vacancies'] = df['tu_columna_original']
 df.to_csv("dataset_features.csv", index=False)
-```
-
-**Solución 2:** Parsear desde nombres de archivo
-
-Si tus dumps se llaman `3.6_vac`, `10.2_vac`:
-
-```python
-# En core/pipeline.py, línea 69
-import re
-
-filename = Path(file_path).name
-match = re.search(r'(\d+\.?\d*)_vac', filename)
-if match:
-    n_vacancies = int(float(match.group(1)))
-else:
-    n_vacancies = 0  # Default
-
-feats["label"] = n_vacancies
 ```
 
 ### Error: "Accuracy muy bajo (< 50%)"
