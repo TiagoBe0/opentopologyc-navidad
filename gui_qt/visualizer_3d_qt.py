@@ -15,7 +15,8 @@ Visualizador 3D de átomos en Qt + Matplotlib
 
 import numpy as np
 import matplotlib
-matplotlib.use("QtAgg")
+# IMPORTANTE: Forzar backend PyQt5 (no PySide6)
+matplotlib.use("Qt5Agg")
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
@@ -24,7 +25,8 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
+# Importar específicamente desde backend PyQt5
+from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib.cm as cm
 
