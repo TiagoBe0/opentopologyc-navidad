@@ -10,21 +10,26 @@ Lanza la interfaz gráfica Qt que permite acceder a:
 - Predicción de Vacancias con Visualizador 3D
 """
 
-import sys
-from pathlib import Path
-import warnings
+# CRÍTICO: Configurar matplotlib ANTES DE CUALQUIER OTRO IMPORT
+# Esto debe ser lo PRIMERO para que matplotlib use PyQt5 en lugar de PySide6
 import os
-
-# CRÍTICO: Configurar backend de matplotlib ANTES de cualquier import
-# Esto previene que matplotlib use PySide6 en lugar de PyQt5
 os.environ['QT_API'] = 'pyqt5'
 os.environ['MPLBACKEND'] = 'Qt5Agg'
 
+# Forzar matplotlib a usar PyQt5 inmediatamente
+import matplotlib
+matplotlib.use('Qt5Agg', force=True)
+
+import sys
+from pathlib import Path
+import warnings
+
 # Suprimir warnings de incompatibilidad Qt5/Qt6 de OVITO
-# OVITO usa Qt6 pero esta aplicación usa PyQt5
-# Ambos pueden coexistir aunque haya warnings
+# OVITO usa PySide6 pero esta aplicación usa PyQt5
+# Matplotlib ahora usa PyQt5 gracias a la configuración arriba
 warnings.filterwarnings('ignore', message='.*OVITO.*PyPI')
 warnings.filterwarnings('ignore', message='.*Incompatible version of the Qt.*')
+warnings.filterwarnings('ignore', message='.*Matplotlib is using.*')
 
 # Agregar el directorio raíz al PYTHONPATH
 root_dir = Path(__file__).parent

@@ -10,7 +10,8 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 
 from gui_qt.base_window import BaseWindow
-from gui_qt.visualizer_3d_qt import AtomVisualizer3DQt
+# IMPORTANTE: No importar AtomVisualizer3DQt aquí (lazy import)
+# Esto previene que matplotlib se importe antes de configurarse
 
 from core.prediction_pipeline import PredictionPipeline
 from config.extractor_config import ExtractorConfig
@@ -168,6 +169,8 @@ class PredictionGUIQt(BaseWindow):
         root.addLayout(controls, 1)
 
         # ---------- VISUALIZADOR ----------
+        # Lazy import: importar AQUÍ para que matplotlib se configure primero
+        from gui_qt.visualizer_3d_qt import AtomVisualizer3DQt
         self.visualizer = AtomVisualizer3DQt()
         root.addWidget(self.visualizer, 3)
 
