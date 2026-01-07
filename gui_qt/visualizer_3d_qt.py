@@ -13,10 +13,14 @@ Visualizador 3D de átomos en Qt + Matplotlib
 ✔ Control de tamaño, alpha, ejes y grilla
 """
 
+# CRÍTICO: Configurar QT_API ANTES de importar matplotlib
+import os
+os.environ['QT_API'] = 'pyqt5'
+
 import numpy as np
 import matplotlib
 # IMPORTANTE: Forzar backend PyQt5 (no PySide6)
-matplotlib.use("Qt5Agg")
+matplotlib.use("Qt5Agg", force=True)
 
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,

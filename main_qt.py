@@ -13,6 +13,12 @@ Lanza la interfaz gráfica Qt que permite acceder a:
 import sys
 from pathlib import Path
 import warnings
+import os
+
+# CRÍTICO: Configurar backend de matplotlib ANTES de cualquier import
+# Esto previene que matplotlib use PySide6 en lugar de PyQt5
+os.environ['QT_API'] = 'pyqt5'
+os.environ['MPLBACKEND'] = 'Qt5Agg'
 
 # Suprimir warnings de incompatibilidad Qt5/Qt6 de OVITO
 # OVITO usa Qt6 pero esta aplicación usa PyQt5
