@@ -12,6 +12,7 @@ from ovito.modifiers import (
 )
 
 from config.extractor_config import ExtractorConfig
+from core.dump_validator import DumpValidator
 
 
 class SurfaceExtractor:
@@ -39,8 +40,17 @@ class SurfaceExtractor:
             dump_file_path.stem + "_surface_normalized.dump"
         )
 
-        # 1) Importar archivo
-        pipeline = import_file(str(dump_file_path))
+        # 1) Validar y pre-procesar dump si es necesario
+        try:
+            validated_path = DumpValidator.validate_and_fix(str(dump_file_path))
+        except ValueError as e:
+            raise ValueError(f"Dump inválido: {e}")
+
+        # 2) Importar archivo (validado o corregido)
+        try:
+            pipeline = import_file(validated_path)
+        except Exception as e:
+            raise ValueError(f"OVITO no pudo importar el archivo: {e}")
 
         # ------------------------------------------------------
         # 2) FILTRADO DE SUPERFICIE

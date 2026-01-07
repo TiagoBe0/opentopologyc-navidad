@@ -560,6 +560,10 @@ class LAMMPSDumpParser:
                 positions_list = []
                 i += 1
 
+                # Verificar si existe columna 'id'
+                has_id_column = 'id' in data['columns']
+                auto_id_counter = 1  # Para generar IDs si no existen
+
                 while i < len(lines) and not lines[i].startswith("ITEM:"):
                     atom_line = lines[i].strip()
                     if atom_line:
@@ -574,8 +578,14 @@ class LAMMPSDumpParser:
                                 val = values[col_idx]
                             atom_dict[col_name] = val
 
-                        # Usar el ID ya parseado correctamente
-                        atom_id = atom_dict['id']
+                        # Usar ID de la columna o generar uno automático
+                        if has_id_column:
+                            atom_id = atom_dict['id']
+                        else:
+                            atom_id = auto_id_counter
+                            atom_dict['id'] = atom_id  # Agregar ID generado
+                            auto_id_counter += 1
+
                         data['atoms'][atom_id] = atom_dict
                         data['atom_ids_ordered'].append(atom_id)
 
