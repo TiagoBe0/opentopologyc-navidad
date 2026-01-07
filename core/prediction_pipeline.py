@@ -320,7 +320,7 @@ class PredictionPipeline:
 
         forbidden = [
             "n_vacancies", "n_atoms_surface",
-            "vacancies", "file", "num_atoms_real"
+            "vacancies", "file", "num_atoms_real", "num_points"
         ]
         X = df.drop(columns=[c for c in forbidden if c in df.columns], errors="ignore")
 
