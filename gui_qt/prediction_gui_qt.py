@@ -491,58 +491,12 @@ class PredictionGUIQt(BaseWindow):
             # Cargar modelo
             model = joblib.load(self.model_path)
 
-            # Extraer features
-            loader = DumpLoader()
-            normalizer = PositionNormalizer(scale_factor=config.a0)
-            extractor = FeatureExtractor(config)
-
-            pos_norm, box_size, _ = normalizer.normalize(self.filtered_positions)
-
-            features = {}
-            if config.compute_grid_features:
-                features.update(extractor.grid_features(pos_norm, box_size))
-            if config.compute_inertia_features:
-                features.update(extractor.inertia_feature(self.filtered_positions))
-            if config.compute_radial_features:
-                features.update(extractor.radial_features(self.filtered_positions))
-            if config.compute_entropy_features:
-                features.update(extractor.entropy_spatial(pos_norm))
-            if config.compute_clustering_features:
-                features.update(extractor.bandwidth(pos_norm))
-
-            features["num_points"] = len(self.filtered_positions)
-
-            # Predecir
-            import pandas as pd
-            df = pd.DataFrame([features])
-
-            forbidden = [
-                "n_vacancies", "n_atoms_surface",
-                "vacancies", "file", "num_atoms_real", "num_points"
-            ]
-            X = df.drop(columns=[c for c in forbidden if c in df.columns], errors="ignore")
-
-            prediction = model.predict(X)[0]
-
-            # Calcular vacancias reales
-            n_atoms_real = len(self.original_dump_data['positions'])
-            n_vacancies_real = config.total_atoms - n_atoms_real
-            error = abs(prediction - n_vacancies_real)
-
-            # Mostrar resultado
-            msg = f"🎯 Predicción Completada\n\n"
-            msg += f"Vacancias predichas: {prediction:.2f}\n"
-            msg += f"Vacancias reales: {n_vacancies_real}\n"
-            msg += f"Error absoluto: {error:.2f}\n\n"
-            msg += f"Átomos en simulación: {n_atoms_real}\n"
-            msg += f"Átomos superficiales: {len(self.filtered_positions)}"
-
+            # SI HAY CLUSTERING: Predecir para cada cluster por separado
             if self.clustering_labels is not None:
-                msg += f"\n\nClustering aplicado: {self.clustering_info['n_clusters']} clusters"
-
-            self.lbl_step3_result.setText(f"✓ Predicción: {prediction:.2f} vacancias (Error: {error:.2f})")
-
-            QMessageBox.information(self, "Predicción Completada", msg)
+                self._predict_with_clusters(model, config)
+            else:
+                # Sin clustering: predicción normal
+                self._predict_without_clusters(model, config)
 
         except Exception as e:
             import traceback
@@ -550,3 +504,133 @@ class PredictionGUIQt(BaseWindow):
             self.lbl_step3_result.setText(f"✗ Error")
             self.lbl_step3_result.setStyleSheet("color: red; font-size: 10px;")
             QMessageBox.critical(self, "Error en Predicción", f"Error:\n{str(e)}")
+
+    def _predict_without_clusters(self, model, config):
+        """Predicción sin clustering (método original)"""
+        normalizer = PositionNormalizer(scale_factor=config.a0)
+        extractor = FeatureExtractor(config)
+
+        pos_norm, box_size, _ = normalizer.normalize(self.filtered_positions)
+
+        features = {}
+        if config.compute_grid_features:
+            features.update(extractor.grid_features(pos_norm, box_size))
+        if config.compute_inertia_features:
+            features.update(extractor.inertia_feature(self.filtered_positions))
+        if config.compute_radial_features:
+            features.update(extractor.radial_features(self.filtered_positions))
+        if config.compute_entropy_features:
+            features.update(extractor.entropy_spatial(pos_norm))
+        if config.compute_clustering_features:
+            features.update(extractor.bandwidth(pos_norm))
+
+        features["num_points"] = len(self.filtered_positions)
+
+        # Predecir
+        import pandas as pd
+        df = pd.DataFrame([features])
+
+        forbidden = [
+            "n_vacancies", "n_atoms_surface",
+            "vacancies", "file", "num_atoms_real", "num_points"
+        ]
+        X = df.drop(columns=[c for c in forbidden if c in df.columns], errors="ignore")
+
+        prediction = model.predict(X)[0]
+
+        # Calcular vacancias reales
+        n_atoms_real = len(self.original_dump_data['positions'])
+        n_vacancies_real = config.total_atoms - n_atoms_real
+        error = abs(prediction - n_vacancies_real)
+
+        # Mostrar resultado
+        msg = f"🎯 Predicción Completada (Sin Clustering)\n\n"
+        msg += f"Vacancias predichas: {prediction:.2f}\n"
+        msg += f"Vacancias reales: {n_vacancies_real}\n"
+        msg += f"Error absoluto: {error:.2f}\n\n"
+        msg += f"Átomos en simulación: {n_atoms_real}\n"
+        msg += f"Átomos superficiales: {len(self.filtered_positions)}"
+
+        self.lbl_step3_result.setText(f"✓ Predicción: {prediction:.2f} vacancias (Error: {error:.2f})")
+
+        QMessageBox.information(self, "Predicción Completada", msg)
+
+    def _predict_with_clusters(self, model, config):
+        """Predicción con clustering: predice para cada cluster y suma"""
+        import pandas as pd
+
+        normalizer = PositionNormalizer(scale_factor=config.a0)
+        extractor = FeatureExtractor(config)
+
+        # Obtener clusters únicos (excluyendo ruido si existe)
+        unique_labels = np.unique(self.clustering_labels)
+        clusters_to_process = [lbl for lbl in unique_labels if lbl != -1]
+
+        cluster_predictions = []
+        total_prediction = 0.0
+
+        # Predecir para cada cluster
+        for cluster_id in clusters_to_process:
+            # Extraer posiciones del cluster
+            mask = self.clustering_labels == cluster_id
+            cluster_positions = self.filtered_positions[mask]
+            n_atoms_cluster = len(cluster_positions)
+
+            # Extraer features para este cluster
+            pos_norm, box_size, _ = normalizer.normalize(cluster_positions)
+
+            features = {}
+            if config.compute_grid_features:
+                features.update(extractor.grid_features(pos_norm, box_size))
+            if config.compute_inertia_features:
+                features.update(extractor.inertia_feature(cluster_positions))
+            if config.compute_radial_features:
+                features.update(extractor.radial_features(cluster_positions))
+            if config.compute_entropy_features:
+                features.update(extractor.entropy_spatial(pos_norm))
+            if config.compute_clustering_features:
+                features.update(extractor.bandwidth(pos_norm))
+
+            features["num_points"] = n_atoms_cluster
+
+            # Predecir vacancias para este cluster
+            df = pd.DataFrame([features])
+            forbidden = [
+                "n_vacancies", "n_atoms_surface",
+                "vacancies", "file", "num_atoms_real", "num_points"
+            ]
+            X = df.drop(columns=[c for c in forbidden if c in df.columns], errors="ignore")
+
+            cluster_pred = model.predict(X)[0]
+            total_prediction += cluster_pred
+
+            cluster_predictions.append({
+                'cluster_id': cluster_id,
+                'n_atoms': n_atoms_cluster,
+                'prediction': cluster_pred
+            })
+
+        # Calcular vacancias reales
+        n_atoms_real = len(self.original_dump_data['positions'])
+        n_vacancies_real = config.total_atoms - n_atoms_real
+        error = abs(total_prediction - n_vacancies_real)
+
+        # Construir mensaje detallado
+        msg = f"🎯 Predicción Completada (Con Clustering)\n\n"
+        msg += f"📊 Total de Clusters: {len(clusters_to_process)}\n"
+        msg += f"━━━━━━━━━━━━━━━━━━━━━━━━━━━\n\n"
+
+        msg += "Predicción por Cluster:\n"
+        for cp in cluster_predictions:
+            msg += f"  • Cluster {cp['cluster_id']}: {cp['prediction']:.2f} vacancias ({cp['n_atoms']} átomos)\n"
+
+        msg += f"\n━━━━━━━━━━━━━━━━━━━━━━━━━━━\n"
+        msg += f"Vacancias predichas (TOTAL): {total_prediction:.2f}\n"
+        msg += f"Vacancias reales: {n_vacancies_real}\n"
+        msg += f"Error absoluto: {error:.2f}\n\n"
+        msg += f"Átomos en simulación: {n_atoms_real}\n"
+        msg += f"Átomos superficiales: {len(self.filtered_positions)}"
+
+        self.lbl_step3_result.setText(f"✓ {len(clusters_to_process)} clusters: {total_prediction:.2f} vacancias (Error: {error:.2f})")
+
+        QMessageBox.information(self, "Predicción por Clusters", msg)
