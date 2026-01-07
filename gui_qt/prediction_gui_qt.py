@@ -35,30 +35,38 @@ class AlphaShapeWorker(QThread):
     finished = Signal(dict)  # {positions, n_atoms, dump_data}
     error = Signal(str)
 
-    def __init__(self, dump_path, probe_radius, num_ghost_layers):
+    def __init__(self, dump_path, probe_radius, num_ghost_layers, lattice_param):
         super().__init__()
         self.dump_path = dump_path
         self.probe_radius = probe_radius
         self.num_ghost_layers = num_ghost_layers
+        self.lattice_param = lattice_param
 
     def run(self):
         try:
+            # Generar nombre de archivo de salida
+            input_path = Path(self.dump_path)
+            output_file = input_path.parent / f"{input_path.stem}_surface_filtered.dump"
+
             # Aplicar filtro Alpha Shape
-            result = filter_surface_atoms(
-                dump_file=self.dump_path,
+            filter_surface_atoms(
+                input_dump=self.dump_path,
+                output_dump=str(output_file),
                 probe_radius=self.probe_radius,
-                num_ghost_layers=self.num_ghost_layers
+                lattice_param=self.lattice_param,
+                num_ghost_layers=self.num_ghost_layers,
+                smoothing=0
             )
 
             # Leer dump filtrado
-            dump_data = LAMMPSDumpParser.read(result['output_file'])
+            dump_data = LAMMPSDumpParser.read(str(output_file))
             positions = dump_data['positions']
 
             self.finished.emit({
                 'positions': positions,
                 'n_atoms': len(positions),
                 'dump_data': dump_data,
-                'output_file': result['output_file']
+                'output_file': str(output_file)
             })
 
         except Exception as e:
@@ -337,7 +345,8 @@ class PredictionGUIQt(BaseWindow):
         self.alpha_worker = AlphaShapeWorker(
             self.dump_path,
             self.spin_probe.value(),
-            self.spin_ghost.value()
+            self.spin_ghost.value(),
+            self.spin_a0.value()  # lattice_param
         )
         self.alpha_worker.finished.connect(self.on_alpha_shape_finished)
         self.alpha_worker.error.connect(self.on_alpha_shape_error)
