@@ -2,7 +2,7 @@
 # Instalar con: pip install -r requirements_qt.txt
 
 # Qt Framework
-PyQt5>=5.15.0
+PySide6>=6.0.0
 
 # Computación científica
 numpy>=1.21.0

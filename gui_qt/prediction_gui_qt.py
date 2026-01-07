@@ -1,13 +1,13 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QFileDialog, QMessageBox, QGroupBox,
     QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox,
     QProgressDialog
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PySide6.QtCore import Qt, QThread, Signal
 
 from gui_qt.base_window import BaseWindow
 # IMPORTANTE: No importar AtomVisualizer3DQt aquí (lazy import)
@@ -21,9 +21,9 @@ class PredictionWorker(QThread):
     """Worker thread para ejecutar predicción sin bloquear la UI"""
 
     # Señales
-    progress = pyqtSignal(int, int, str)  # step, total, message
-    finished = pyqtSignal(dict)  # result
-    error = pyqtSignal(str)  # error message
+    progress = Signal(int, int, str)  # step, total, message
+    finished = Signal(dict)  # result
+    error = Signal(str)  # error message
 
     def __init__(self, pipeline, dump_path, params):
         super().__init__()

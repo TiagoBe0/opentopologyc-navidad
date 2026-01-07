@@ -15,22 +15,22 @@ Visualizador 3D de átomos en Qt + Matplotlib
 
 # CRÍTICO: Configurar QT_API ANTES de importar matplotlib
 import os
-os.environ['QT_API'] = 'pyqt5'
+os.environ['QT_API'] = 'pyside6'
 
 import numpy as np
 import matplotlib
-# IMPORTANTE: Forzar backend PyQt5 (no PySide6)
-matplotlib.use("Qt5Agg", force=True)
+# IMPORTANTE: Usar backend QtAgg para PySide6
+matplotlib.use("QtAgg", force=True)
 
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout,
     QPushButton, QLabel, QSlider, QCheckBox,
     QFileDialog, QGroupBox, QComboBox
 )
-from PyQt5.QtCore import Qt
+from PySide6.QtCore import Qt
 
-# Importar específicamente desde backend PyQt5
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+# Importar específicamente desde backend QtAgg
+from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib.cm as cm
 

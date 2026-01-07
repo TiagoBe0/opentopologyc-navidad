@@ -6,11 +6,11 @@ if __name__ == "__main__":
     root_dir = Path(__file__).parent.parent
     sys.path.insert(0, str(root_dir))
 
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QApplication, QWidget, QVBoxLayout,
     QPushButton, QLabel
 )
-from PyQt5.QtCore import Qt
+from PySide6.QtCore import Qt
 
 from gui_qt.base_window import BaseWindow
 from gui_qt.extractor_gui_qt import ExtractorGUIQt

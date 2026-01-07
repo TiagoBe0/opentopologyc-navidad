@@ -4,7 +4,7 @@
 """
 Extractor GUI - OpenTopologyC
 
-IMPORTANTE: Este módulo NO usa QThread porque OVITO no es thread-safe con PyQt5.
+IMPORTANTE: Este módulo NO usa QThread porque OVITO no es thread-safe con PySide6.
 Usar QThread causa Segmentation Fault cuando OVITO intenta acceder a recursos Qt.
 
 Solución implementada:
@@ -15,13 +15,13 @@ Solución implementada:
 Ver: https://www.ovito.org/docs/current/python/introduction/running.html#thread-safety
 """
 
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QPushButton, QLabel,
     QFileDialog, QMessageBox, QGroupBox,
     QSpinBox, QDoubleSpinBox, QTextEdit,
     QProgressBar, QCheckBox, QApplication
 )
-from PyQt5.QtCore import Qt, QTimer
+from PySide6.QtCore import Qt, QTimer
 
 from gui_qt.base_window import BaseWindow
 from core.pipeline import ExtractorPipeline

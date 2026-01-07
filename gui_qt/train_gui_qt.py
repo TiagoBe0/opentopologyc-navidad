@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 # -*- coding: utf-8 -*-
 
-from PyQt5.QtWidgets import (
+from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QPushButton, QLabel,
     QFileDialog, QMessageBox, QGroupBox,
     QSpinBox, QTextEdit, QProgressBar, QLineEdit
 )
-from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PySide6.QtCore import Qt, QThread, Signal
 
 from gui_qt.base_window import BaseWindow
 from core.training_pipeline import TrainingPipeline
@@ -16,10 +16,10 @@ from core.training_pipeline import TrainingPipeline
 # THREAD DE ENTRENAMIENTO
 # ======================================================
 class TrainingWorker(QThread):
-    log = pyqtSignal(str)
-    progress = pyqtSignal(int)
-    finished = pyqtSignal(str)
-    error = pyqtSignal(str)
+    log = Signal(str)
+    progress = Signal(int)
+    finished = Signal(str)
+    error = Signal(str)
 
     def __init__(self, csv_path, model_path, n_estimators, max_depth, target_column=None):
         super().__init__()

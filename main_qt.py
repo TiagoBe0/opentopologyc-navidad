@@ -11,22 +11,21 @@ Lanza la interfaz gráfica Qt que permite acceder a:
 """
 
 # CRÍTICO: Configurar matplotlib ANTES DE CUALQUIER OTRO IMPORT
-# Esto debe ser lo PRIMERO para que matplotlib use PyQt5 en lugar de PySide6
+# Esto debe ser lo PRIMERO para que matplotlib use PySide6
 import os
-os.environ['QT_API'] = 'pyqt5'
-os.environ['MPLBACKEND'] = 'Qt5Agg'
+os.environ['QT_API'] = 'pyside6'
+os.environ['MPLBACKEND'] = 'QtAgg'
 
-# Forzar matplotlib a usar PyQt5 inmediatamente
+# Forzar matplotlib a usar PySide6 inmediatamente
 import matplotlib
-matplotlib.use('Qt5Agg', force=True)
+matplotlib.use('QtAgg', force=True)
 
 import sys
 from pathlib import Path
 import warnings
 
-# Suprimir warnings de incompatibilidad Qt5/Qt6 de OVITO
-# OVITO usa PySide6 pero esta aplicación usa PyQt5
-# Matplotlib ahora usa PyQt5 gracias a la configuración arriba
+# Suprimir warnings de incompatibilidad Qt
+# OVITO y matplotlib ahora usan PySide6
 warnings.filterwarnings('ignore', message='.*OVITO.*PyPI')
 warnings.filterwarnings('ignore', message='.*Incompatible version of the Qt.*')
 warnings.filterwarnings('ignore', message='.*Matplotlib is using.*')
@@ -35,7 +34,7 @@ warnings.filterwarnings('ignore', message='.*Matplotlib is using.*')
 root_dir = Path(__file__).parent
 sys.path.insert(0, str(root_dir))
 
-from PyQt5.QtWidgets import QApplication
+from PySide6.QtWidgets import QApplication
 from gui_qt.main_window import MainWindow
 from core.logger import setup_logger, log_session_start, log_session_end
 
