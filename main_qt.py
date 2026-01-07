@@ -26,22 +26,48 @@ sys.path.insert(0, str(root_dir))
 
 from PyQt5.QtWidgets import QApplication
 from gui_qt.main_window import MainWindow
+from core.logger import setup_logger, log_session_start, log_session_end
 
 
 def main():
     """Inicia la aplicación OpenTopologyC Qt"""
-    app = QApplication(sys.argv)
+    # Configurar logging
+    logger = setup_logger(
+        name="opentopologyc",
+        log_file="opentopologyc.log",
+        console=False  # No duplicar salida en consola
+    )
 
-    # Configurar estilo de aplicación
-    app.setApplicationName("OpenTopologyC")
-    app.setOrganizationName("OpenTopologyC")
+    log_session_start(logger, "GUI Qt")
+    logger.info("Iniciando aplicación OpenTopologyC Qt")
 
-    # Crear y mostrar ventana principal
-    window = MainWindow()
-    window.show()
+    try:
+        app = QApplication(sys.argv)
 
-    # Ejecutar aplicación
-    sys.exit(app.exec_())
+        # Configurar estilo de aplicación
+        app.setApplicationName("OpenTopologyC")
+        app.setOrganizationName("OpenTopologyC")
+
+        logger.info("Aplicación Qt configurada")
+
+        # Crear y mostrar ventana principal
+        window = MainWindow()
+        window.show()
+
+        logger.info("Ventana principal mostrada")
+
+        # Ejecutar aplicación
+        exit_code = app.exec_()
+
+        logger.info(f"Aplicación cerrada con código: {exit_code}")
+        log_session_end(logger)
+
+        sys.exit(exit_code)
+
+    except Exception as e:
+        logger.error(f"Error en aplicación: {str(e)}", exc_info=True)
+        log_session_end(logger)
+        raise
 
 
 if __name__ == "__main__":

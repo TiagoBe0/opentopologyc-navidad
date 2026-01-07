@@ -131,6 +131,34 @@ class PredictionGUIQt(BaseWindow):
         cluster_box.setLayout(cl)
         controls.addWidget(cluster_box)
 
+        # Parámetros del Material
+        material_box = QGroupBox("Parámetros del Material")
+        material_layout = QVBoxLayout()
+
+        self.spin_total_atoms = QSpinBox()
+        self.spin_total_atoms.setRange(100, 100000)
+        self.spin_total_atoms.setValue(16384)
+
+        self.spin_a0 = QDoubleSpinBox()
+        self.spin_a0.setValue(3.532)
+        self.spin_a0.setSingleStep(0.001)
+        self.spin_a0.setRange(1.0, 10.0)
+        self.spin_a0.setDecimals(4)
+
+        self.combo_lattice = QComboBox()
+        self.combo_lattice.addItems(["fcc", "bcc", "hcp", "diamond", "sc"])
+        self.combo_lattice.setCurrentText("fcc")
+
+        material_layout.addWidget(QLabel("Átomos totales (perfectos):"))
+        material_layout.addWidget(self.spin_total_atoms)
+        material_layout.addWidget(QLabel("Parámetro de red a0 (Å):"))
+        material_layout.addWidget(self.spin_a0)
+        material_layout.addWidget(QLabel("Tipo de red:"))
+        material_layout.addWidget(self.combo_lattice)
+
+        material_box.setLayout(material_layout)
+        controls.addWidget(material_box)
+
         # Botón Predecir
         btn_predict = QPushButton("🎯 Predecir y Visualizar")
         btn_predict.setMinimumHeight(40)
@@ -176,9 +204,9 @@ class PredictionGUIQt(BaseWindow):
             config = ExtractorConfig(
                 input_dir=".",
                 probe_radius=self.spin_probe.value(),
-                total_atoms=16384,  # TODO: hacer configurable
-                a0=3.532,  # TODO: hacer configurable
-                lattice_type="fcc",  # TODO: hacer configurable
+                total_atoms=self.spin_total_atoms.value(),
+                a0=self.spin_a0.value(),
+                lattice_type=self.combo_lattice.currentText(),
                 compute_grid_features=True,
                 compute_hull_features=True,
                 compute_inertia_features=True,
