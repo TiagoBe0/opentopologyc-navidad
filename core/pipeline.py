@@ -101,8 +101,8 @@ class ExtractorPipeline:
 
         files = sorted(
             str(f) for f in input_dir.glob("*")
-            if f.is_file()  # Solo archivos (no directorios)
-            and not f.name.endswith("_surface_normalized.dump")  # No archivos procesados
+            if f.is_file()  # Solo archivos (no directorios, ignora normalized_dumps/)
+            and not f.name.endswith("_surface_normalized.dump")  # No archivos procesados (legacy)
             and f.suffix.lower() not in ignore_extensions  # No extensiones ignoradas
         )
 

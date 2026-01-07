@@ -35,10 +35,12 @@ class SurfaceExtractor:
     def extract(self, dump_file_path: str):
         dump_file_path = Path(dump_file_path)
 
-        # Archivo de salida
-        output_path = dump_file_path.with_name(
-            dump_file_path.stem + "_surface_normalized.dump"
-        )
+        # Crear subdirectorio para archivos normalizados
+        normalized_dir = dump_file_path.parent / "normalized_dumps"
+        normalized_dir.mkdir(exist_ok=True)
+
+        # Archivo de salida en subdirectorio
+        output_path = normalized_dir / (dump_file_path.stem + "_surface_normalized.dump")
 
         # 1) Validar y pre-procesar dump si es necesario
         try:

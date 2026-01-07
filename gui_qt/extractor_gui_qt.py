@@ -265,8 +265,8 @@ class ExtractorGUIQt(BaseWindow):
 
             self.files_to_process = sorted(
                 str(f) for f in input_dir.glob("*")
-                if f.is_file()
-                and not f.name.endswith("_surface_normalized.dump")
+                if f.is_file()  # Solo archivos (no directorios, ignora normalized_dumps/)
+                and not f.name.endswith("_surface_normalized.dump")  # No archivos procesados (legacy)
                 and f.suffix.lower() not in ignore_extensions
             )
 
