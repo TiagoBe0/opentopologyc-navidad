@@ -328,8 +328,9 @@ class PredictionGUIQt(BaseWindow):
             self.lbl_step2_result.setText("")
             self.lbl_step3_result.setText("")
 
-            self.btn_step2.setEnabled(False)
-            self.btn_step3.setEnabled(False)
+            # HABILITAR todos los pasos al cargar dump (pasos independientes)
+            self.btn_step2.setEnabled(True)
+            self.btn_step3.setEnabled(True)
 
             # Resetear controles de filtro de clusters
             self.spin_cluster_filter.setEnabled(False)
@@ -347,6 +348,25 @@ class PredictionGUIQt(BaseWindow):
             self.lbl_model.setStyleSheet("color: green; font-size: 10px;")
 
     # ======================================================
+    # MÉTODOS AUXILIARES
+    # ======================================================
+    def _get_current_positions(self):
+        """
+        Devuelve las posiciones actuales a usar:
+        - Si hay Alpha Shape aplicado, devuelve filtered_positions
+        - Si no, devuelve posiciones originales del dump
+
+        Returns:
+            tuple: (positions, source_description)
+        """
+        if self.filtered_positions is not None:
+            return self.filtered_positions, "átomos filtrados (Alpha Shape)"
+        elif self.original_dump_data is not None:
+            return self.original_dump_data['positions'], "átomos originales (sin Alpha Shape)"
+        else:
+            return None, "sin datos"
+
+    # ======================================================
     # PASO 1: ALPHA SHAPE
     # ======================================================
     def run_step1_alpha_shape(self):
@@ -359,8 +379,6 @@ class PredictionGUIQt(BaseWindow):
             self.filtered_positions = self.original_dump_data['positions']
             self.filtered_dump_data = self.original_dump_data
             self.lbl_step1_result.setText(f"✓ Alpha Shape omitido. Átomos: {len(self.filtered_positions)}")
-            self.btn_step2.setEnabled(True)
-            self.btn_step3.setEnabled(True)
             return
 
         # Ejecutar Alpha Shape
@@ -386,10 +404,6 @@ class PredictionGUIQt(BaseWindow):
 
         self.lbl_step1_result.setText(f"✓ Completado. Átomos superficiales: {result['n_atoms']}")
 
-        # Habilitar paso 2 y 3
-        self.btn_step2.setEnabled(True)
-        self.btn_step3.setEnabled(True)
-
         # Restaurar botón
         self.btn_step1.setEnabled(True)
         self.btn_step1.setText("▶ Ejecutar Paso 1")
@@ -410,8 +424,11 @@ class PredictionGUIQt(BaseWindow):
     # PASO 2: CLUSTERING
     # ======================================================
     def run_step2_clustering(self):
-        if self.filtered_positions is None:
-            QMessageBox.warning(self, "Error", "Debe ejecutar Paso 1 primero")
+        # Obtener posiciones actuales (filtradas o originales)
+        positions, source_desc = self._get_current_positions()
+
+        if positions is None:
+            QMessageBox.warning(self, "Error", "Debe cargar un dump primero")
             return
 
         if not self.chk_cluster.isChecked():
@@ -427,7 +444,7 @@ class PredictionGUIQt(BaseWindow):
             self.btn_view_all.setEnabled(False)
 
             # Actualizar visualizador sin colores de clustering
-            self.visualizer.positions = self.filtered_positions
+            self.visualizer.positions = positions
             self.visualizer.colors = None
             self.visualizer.cluster_labels = None
             self.visualizer.plot()
@@ -454,8 +471,12 @@ class PredictionGUIQt(BaseWindow):
         self.btn_step2.setEnabled(False)
         self.btn_step2.setText("⏳ Procesando...")
 
+        # Guardar las posiciones que se están usando (para el visualizador después)
+        self.current_clustering_positions = positions
+        self.current_clustering_source = source_desc
+
         self.cluster_worker = ClusteringWorker(
-            self.filtered_positions,
+            positions,
             method,
             params
         )
@@ -470,10 +491,12 @@ class PredictionGUIQt(BaseWindow):
         n_clusters = self.clustering_info['n_clusters']
 
         # Actualizar visualizador con colores de clustering
-        self.visualizer.positions = self.filtered_positions
+        self.visualizer.positions = self.current_clustering_positions
         self.visualizer.apply_clustering(self.clustering_labels)
 
-        self.lbl_step2_result.setText(f"✓ Completado. Clusters: {n_clusters}")
+        # Mensaje con información de origen de datos
+        source_info = f" ({self.current_clustering_source})"
+        self.lbl_step2_result.setText(f"✓ Completado. Clusters: {n_clusters}{source_info}")
 
         # Habilitar controles de filtro de clusters
         unique_labels = np.unique(self.clustering_labels)
@@ -491,7 +514,7 @@ class PredictionGUIQt(BaseWindow):
         self.btn_step2.setText("▶ Ejecutar Paso 2")
 
         QMessageBox.information(self, "Paso 2 Completado",
-                               f"Clustering aplicado\nMétodo: {result['method']}\nClusters encontrados: {n_clusters}")
+                               f"Clustering aplicado\nMétodo: {result['method']}\nClusters encontrados: {n_clusters}\n\nOrigen: {self.current_clustering_source}")
 
     def on_clustering_error(self, error_msg):
         self.lbl_step2_result.setText(f"✗ Error: {error_msg}")
@@ -549,8 +572,11 @@ class PredictionGUIQt(BaseWindow):
     # PASO 3: PREDICCIÓN
     # ======================================================
     def run_step3_prediction(self):
-        if self.filtered_positions is None:
-            QMessageBox.warning(self, "Error", "Debe ejecutar Paso 1 primero")
+        # Obtener posiciones actuales (filtradas o originales)
+        positions, source_desc = self._get_current_positions()
+
+        if positions is None:
+            QMessageBox.warning(self, "Error", "Debe cargar un dump primero")
             return
 
         if not self.model_path:
@@ -558,6 +584,10 @@ class PredictionGUIQt(BaseWindow):
             return
 
         try:
+            # Guardar posiciones y origen para usar en predicción
+            self.current_prediction_positions = positions
+            self.current_prediction_source = source_desc
+
             # Calcular total de átomos del cristal perfecto
             box_bounds = self.original_dump_data['box_bounds']
             total_atoms = self._calculate_total_atoms(
@@ -603,21 +633,21 @@ class PredictionGUIQt(BaseWindow):
         normalizer = PositionNormalizer(scale_factor=config.a0)
         extractor = FeatureExtractor(config)
 
-        pos_norm, box_size, _ = normalizer.normalize(self.filtered_positions)
+        pos_norm, box_size, _ = normalizer.normalize(self.current_prediction_positions)
 
         features = {}
         if config.compute_grid_features:
             features.update(extractor.grid_features(pos_norm, box_size))
         if config.compute_inertia_features:
-            features.update(extractor.inertia_feature(self.filtered_positions))
+            features.update(extractor.inertia_feature(self.current_prediction_positions))
         if config.compute_radial_features:
-            features.update(extractor.radial_features(self.filtered_positions))
+            features.update(extractor.radial_features(self.current_prediction_positions))
         if config.compute_entropy_features:
             features.update(extractor.entropy_spatial(pos_norm))
         if config.compute_clustering_features:
             features.update(extractor.bandwidth(pos_norm))
 
-        features["num_points"] = len(self.filtered_positions)
+        features["num_points"] = len(self.current_prediction_positions)
 
         # Predecir
         import pandas as pd
@@ -642,7 +672,7 @@ class PredictionGUIQt(BaseWindow):
         msg += f"Vacancias reales: {n_vacancies_real}\n"
         msg += f"Error absoluto: {error:.2f}\n\n"
         msg += f"Átomos en simulación: {n_atoms_real}\n"
-        msg += f"Átomos superficiales: {len(self.filtered_positions)}"
+        msg += f"Átomos usados: {len(self.current_prediction_positions)} ({self.current_prediction_source})"
 
         self.lbl_step3_result.setText(f"✓ Predicción: {prediction:.2f} vacancias (Error: {error:.2f})")
 
@@ -655,8 +685,8 @@ class PredictionGUIQt(BaseWindow):
         normalizer = PositionNormalizer(scale_factor=config.a0)
         extractor = FeatureExtractor(config)
 
-        # Normalizar todas las posiciones filtradas una vez para obtener el box_size de referencia
-        all_pos_norm, reference_box_size, _ = normalizer.normalize(self.filtered_positions)
+        # Normalizar todas las posiciones una vez para obtener el box_size de referencia
+        all_pos_norm, reference_box_size, _ = normalizer.normalize(self.current_prediction_positions)
 
         # Obtener clusters únicos (excluyendo ruido si existe)
         unique_labels = np.unique(self.clustering_labels)
@@ -669,7 +699,7 @@ class PredictionGUIQt(BaseWindow):
         for cluster_id in clusters_to_process:
             # Extraer posiciones del cluster
             mask = self.clustering_labels == cluster_id
-            cluster_positions = self.filtered_positions[mask]
+            cluster_positions = self.current_prediction_positions[mask]
             n_atoms_cluster = len(cluster_positions)
 
             # Saltar clusters muy pequeños (menos de 10 átomos)
@@ -740,7 +770,7 @@ class PredictionGUIQt(BaseWindow):
         msg += f"Vacancias reales: {n_vacancies_real}\n"
         msg += f"Error absoluto: {error:.2f}\n\n"
         msg += f"Átomos en simulación: {n_atoms_real}\n"
-        msg += f"Átomos superficiales: {len(self.filtered_positions)}"
+        msg += f"Átomos usados: {len(self.current_prediction_positions)} ({self.current_prediction_source})"
 
         self.lbl_step3_result.setText(f"✓ {len(clusters_to_process)} clusters: {total_prediction:.2f} vacancias (Error: {error:.2f})")
 
