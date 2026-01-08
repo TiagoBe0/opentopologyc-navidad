@@ -229,6 +229,31 @@ class PredictionGUIQt(BaseWindow):
         self.lbl_step2_result.setStyleSheet("color: blue; font-size: 10px;")
         step2_layout.addWidget(self.lbl_step2_result)
 
+        # --- FILTRO DE CLUSTERS ---
+        step2_layout.addWidget(QLabel("─" * 30))
+        step2_layout.addWidget(QLabel("🔍 Visualizar Cluster Individual:"))
+
+        filter_layout = QHBoxLayout()
+        filter_layout.addWidget(QLabel("Cluster:"))
+        self.spin_cluster_filter = QSpinBox()
+        self.spin_cluster_filter.setRange(0, 0)
+        self.spin_cluster_filter.setValue(0)
+        self.spin_cluster_filter.setEnabled(False)
+        filter_layout.addWidget(self.spin_cluster_filter)
+        step2_layout.addLayout(filter_layout)
+
+        btn_filter_layout = QHBoxLayout()
+        self.btn_view_cluster = QPushButton("👁️ Ver cluster")
+        self.btn_view_cluster.setEnabled(False)
+        self.btn_view_cluster.clicked.connect(self.view_selected_cluster)
+        btn_filter_layout.addWidget(self.btn_view_cluster)
+
+        self.btn_view_all = QPushButton("👁️ Ver todos")
+        self.btn_view_all.setEnabled(False)
+        self.btn_view_all.clicked.connect(self.view_all_clusters)
+        btn_filter_layout.addWidget(self.btn_view_all)
+        step2_layout.addLayout(btn_filter_layout)
+
         step2_box.setLayout(step2_layout)
         controls.addWidget(step2_box)
 
@@ -305,6 +330,12 @@ class PredictionGUIQt(BaseWindow):
 
             self.btn_step2.setEnabled(False)
             self.btn_step3.setEnabled(False)
+
+            # Resetear controles de filtro de clusters
+            self.spin_cluster_filter.setEnabled(False)
+            self.spin_cluster_filter.setRange(0, 0)
+            self.btn_view_cluster.setEnabled(False)
+            self.btn_view_all.setEnabled(False)
 
     def load_model(self):
         path, _ = QFileDialog.getOpenFileName(
@@ -389,6 +420,12 @@ class PredictionGUIQt(BaseWindow):
             self.clustering_info = None
             self.lbl_step2_result.setText("✓ Clustering omitido")
 
+            # Deshabilitar controles de filtro de clusters
+            self.spin_cluster_filter.setEnabled(False)
+            self.spin_cluster_filter.setRange(0, 0)
+            self.btn_view_cluster.setEnabled(False)
+            self.btn_view_all.setEnabled(False)
+
             # Actualizar visualizador sin colores de clustering
             self.visualizer.positions = self.filtered_positions
             self.visualizer.colors = None
@@ -437,6 +474,17 @@ class PredictionGUIQt(BaseWindow):
         self.visualizer.apply_clustering(self.clustering_labels)
 
         self.lbl_step2_result.setText(f"✓ Completado. Clusters: {n_clusters}")
+
+        # Habilitar controles de filtro de clusters
+        unique_labels = np.unique(self.clustering_labels)
+        cluster_ids = [lbl for lbl in unique_labels if lbl != -1]
+
+        if len(cluster_ids) > 0:
+            self.spin_cluster_filter.setEnabled(True)
+            self.spin_cluster_filter.setRange(min(cluster_ids), max(cluster_ids))
+            self.spin_cluster_filter.setValue(min(cluster_ids))
+            self.btn_view_cluster.setEnabled(True)
+            self.btn_view_all.setEnabled(True)
 
         # Restaurar botón
         self.btn_step2.setEnabled(True)
@@ -697,3 +745,35 @@ class PredictionGUIQt(BaseWindow):
         self.lbl_step3_result.setText(f"✓ {len(clusters_to_process)} clusters: {total_prediction:.2f} vacancias (Error: {error:.2f})")
 
         QMessageBox.information(self, "Predicción por Clusters", msg)
+
+    # ======================================================
+    # VISUALIZACIÓN DE CLUSTERS INDIVIDUALES
+    # ======================================================
+    def view_selected_cluster(self):
+        """Muestra solo el cluster seleccionado en el visualizador"""
+        if self.clustering_labels is None:
+            QMessageBox.warning(self, "Error", "No hay clustering aplicado")
+            return
+
+        target_cluster = self.spin_cluster_filter.value()
+
+        # Contar átomos en el cluster seleccionado
+        mask = self.clustering_labels == target_cluster
+        n_atoms = np.sum(mask)
+
+        # Actualizar visualizador con cluster resaltado
+        self.visualizer.apply_clustering(self.clustering_labels, target_cluster=target_cluster)
+
+        self.lbl_step2_result.setText(f"✓ Visualizando cluster {target_cluster} ({n_atoms} átomos)")
+
+    def view_all_clusters(self):
+        """Muestra todos los clusters en el visualizador"""
+        if self.clustering_labels is None:
+            QMessageBox.warning(self, "Error", "No hay clustering aplicado")
+            return
+
+        # Actualizar visualizador sin filtro
+        self.visualizer.apply_clustering(self.clustering_labels, target_cluster=None)
+
+        n_clusters = self.clustering_info['n_clusters']
+        self.lbl_step2_result.setText(f"✓ Visualizando todos los clusters ({n_clusters} clusters)")
