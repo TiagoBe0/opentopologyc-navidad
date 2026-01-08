@@ -283,13 +283,13 @@ class AtomVisualizer3DQt(QWidget):
                 **scatter_kwargs
             )
         else:
-            # Sin colores custom, usar alpha global
+            # Sin colores custom, usar color steelblue
+            # Alpha ya está en scatter_kwargs si no hay highlight_cluster
             self.ax.scatter(
                 self.positions[:, 0],
                 self.positions[:, 1],
                 self.positions[:, 2],
                 color="steelblue",
-                alpha=self.alpha,
                 **scatter_kwargs
             )
 
