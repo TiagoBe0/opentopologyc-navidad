@@ -5,9 +5,10 @@ from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QPushButton, QLabel,
     QFileDialog, QMessageBox, QGroupBox,
     QSpinBox, QTextEdit, QProgressBar, QLineEdit,
-    QComboBox
+    QComboBox, QDialog, QScrollArea, QHBoxLayout
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
+from PyQt5.QtGui import QPixmap
 
 from gui_qt.base_window import BaseWindow
 from core.training_pipeline import TrainingPipeline
@@ -235,6 +236,83 @@ class TrainingGUIQt(BaseWindow):
 
         QMessageBox.information(self, "Entrenamiento Completado", msg)
 
+        # Si es regresión, mostrar automáticamente el gráfico de resultados
+        if 'plot_path' in results:
+            self.show_results_plot(results['plot_path'])
+
     def on_error(self, msg):
         QMessageBox.critical(self, "Error", msg)
         self.log.append("❌ " + msg)
+
+    def show_results_plot(self, plot_path):
+        """
+        Muestra el gráfico de resultados en un diálogo
+
+        Args:
+            plot_path: Ruta al archivo PNG de resultados
+        """
+        from pathlib import Path
+
+        # Verificar que el archivo existe
+        if not Path(plot_path).exists():
+            QMessageBox.warning(self, "Error", f"No se encontró el gráfico: {plot_path}")
+            return
+
+        # Crear diálogo
+        dialog = QDialog(self)
+        dialog.setWindowTitle("📊 Resultados del Entrenamiento")
+        dialog.resize(1400, 1000)
+
+        layout = QVBoxLayout(dialog)
+
+        # Crear área de scroll por si la imagen es muy grande
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+
+        # Label para mostrar la imagen
+        image_label = QLabel()
+        pixmap = QPixmap(plot_path)
+
+        # Escalar la imagen si es necesario (mantener aspect ratio)
+        if pixmap.width() > 1350 or pixmap.height() > 900:
+            pixmap = pixmap.scaled(1350, 900, Qt.KeepAspectRatio, Qt.SmoothTransformation)
+
+        image_label.setPixmap(pixmap)
+        image_label.setAlignment(Qt.AlignCenter)
+
+        scroll_area.setWidget(image_label)
+        layout.addWidget(scroll_area)
+
+        # Botones
+        btn_layout = QHBoxLayout()
+
+        btn_save_as = QPushButton("💾 Guardar como...")
+        btn_save_as.clicked.connect(lambda: self.save_plot_as(plot_path))
+        btn_layout.addWidget(btn_save_as)
+
+        btn_close = QPushButton("✓ Cerrar")
+        btn_close.clicked.connect(dialog.accept)
+        btn_layout.addWidget(btn_close)
+
+        layout.addLayout(btn_layout)
+
+        # Mostrar diálogo
+        dialog.exec()
+
+    def save_plot_as(self, original_path):
+        """Permite guardar el gráfico en otra ubicación"""
+        from pathlib import Path
+
+        save_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Guardar gráfico como",
+            str(Path.home() / "evaluacion_modelo.png"),
+            "PNG Image (*.png);;All Files (*)"
+        )
+
+        if save_path:
+            import shutil
+            shutil.copy(original_path, save_path)
+            QMessageBox.information(self, "Guardado", f"Gráfico guardado en:\n{save_path}")
