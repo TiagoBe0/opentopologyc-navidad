@@ -4,7 +4,8 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QPushButton, QLabel,
     QFileDialog, QMessageBox, QGroupBox,
-    QSpinBox, QTextEdit, QProgressBar, QLineEdit
+    QSpinBox, QTextEdit, QProgressBar, QLineEdit,
+    QComboBox
 )
 from PyQt5.QtCore import Qt, QThread, pyqtSignal
 
@@ -18,16 +19,17 @@ from core.training_pipeline import TrainingPipeline
 class TrainingWorker(QThread):
     log = pyqtSignal(str)
     progress = pyqtSignal(int)
-    finished = pyqtSignal(str)
+    finished = pyqtSignal(dict)  # Cambiar a dict para pasar resultados
     error = pyqtSignal(str)
 
-    def __init__(self, csv_path, model_path, n_estimators, max_depth, target_column=None):
+    def __init__(self, csv_path, model_path, n_estimators, max_depth, target_column=None, task_type="regression"):
         super().__init__()
         self.csv_path = csv_path
         self.model_path = model_path
         self.n_estimators = n_estimators
         self.max_depth = max_depth
         self.target_column = target_column
+        self.task_type = task_type
 
     def run(self):
         try:
@@ -38,18 +40,25 @@ class TrainingWorker(QThread):
                 n_estimators=self.n_estimators,
                 max_depth=self.max_depth,
                 target_column=self.target_column,
+                task_type=self.task_type
             )
 
             def callback(step, total):
                 pct = int((step / total) * 100)
                 self.progress.emit(pct)
 
-            pipeline.train(progress_callback=callback)
+            # Ejecutar según tipo de tarea
+            if self.task_type == "regression":
+                results = pipeline.train_regression(progress_callback=callback)
+            else:
+                results = pipeline.train(progress_callback=callback)
 
             self.progress.emit(100)
-            self.finished.emit("✅ Entrenamiento finalizado")
+            self.finished.emit(results)
 
         except Exception as e:
+            import traceback
+            traceback.print_exc()
             self.error.emit(str(e))
 
 
@@ -93,23 +102,29 @@ class TrainingGUIQt(BaseWindow):
         params = QGroupBox("Parámetros del modelo")
         p = QVBoxLayout()
 
+        # Tipo de tarea
+        p.addWidget(QLabel("Tipo de tarea:"))
+        self.combo_task = QComboBox()
+        self.combo_task.addItems(["Regresión", "Clasificación"])
+        self.combo_task.setCurrentIndex(0)  # Default: Regresión
+        p.addWidget(self.combo_task)
+
+        p.addWidget(QLabel("n_estimators"))
         self.spin_estimators = QSpinBox()
         self.spin_estimators.setRange(10, 500)
         self.spin_estimators.setValue(100)
+        p.addWidget(self.spin_estimators)
 
+        p.addWidget(QLabel("max_depth"))
         self.spin_depth = QSpinBox()
         self.spin_depth.setRange(1, 50)
         self.spin_depth.setValue(10)
+        p.addWidget(self.spin_depth)
 
         # Target column (opcional)
+        p.addWidget(QLabel("Columna target (dejar vacío para auto-detectar)"))
         self.txt_target = QLineEdit()
         self.txt_target.setPlaceholderText("(auto-detectar)")
-
-        p.addWidget(QLabel("n_estimators"))
-        p.addWidget(self.spin_estimators)
-        p.addWidget(QLabel("max_depth"))
-        p.addWidget(self.spin_depth)
-        p.addWidget(QLabel("Columna target (dejar vacío para auto-detectar)"))
         p.addWidget(self.txt_target)
 
         params.setLayout(p)
@@ -167,12 +182,16 @@ class TrainingGUIQt(BaseWindow):
         # Obtener columna target (None si está vacío)
         target_col = self.txt_target.text().strip() or None
 
+        # Obtener tipo de tarea
+        task_type = "regression" if self.combo_task.currentText() == "Regresión" else "classification"
+
         self.worker = TrainingWorker(
             self.csv_path,
             self.model_path,
             self.spin_estimators.value(),
             self.spin_depth.value(),
             target_col,
+            task_type
         )
 
         self.worker.log.connect(self.log.append)
@@ -182,9 +201,39 @@ class TrainingGUIQt(BaseWindow):
 
         self.worker.start()
 
-    def on_finished(self, msg):
-        self.log.append(msg)
-        QMessageBox.information(self, "Listo", msg)
+    def on_finished(self, results):
+        """Maneja los resultados del entrenamiento"""
+        self.log.append("\n" + "="*60)
+        self.log.append("✅ ENTRENAMIENTO COMPLETADO")
+        self.log.append("="*60)
+
+        # Mostrar métricas según tipo de tarea
+        if 'r2_test' in results:
+            # Regresión
+            msg = f"🎯 Resultados de Regresión:\n\n"
+            msg += f"R² Score: {results['r2_test']:.4f}\n"
+            msg += f"RMSE: {results['rmse_test']:.4f}\n"
+            msg += f"MAE: {results['mae_test']:.4f}\n\n"
+            msg += f"📁 Archivos generados:\n"
+            msg += f"• Modelo: {results['model_path']}\n"
+            msg += f"• Gráficos: {results['plot_path']}\n"
+            msg += f"• Métricas: {results['metrics_path']}\n"
+            msg += f"• Feature Importance: {results['importance_path']}"
+
+            self.log.append(f"\n📊 R² Score: {results['r2_test']:.4f}")
+            self.log.append(f"📊 RMSE: {results['rmse_test']:.4f}")
+            self.log.append(f"📊 MAE: {results['mae_test']:.4f}")
+        else:
+            # Clasificación
+            msg = f"🎯 Resultados de Clasificación:\n\n"
+            msg += f"Accuracy: {results['accuracy']:.4f}\n\n"
+            msg += f"📁 Modelo guardado:\n{results['model_path']}"
+
+            self.log.append(f"\n📊 Accuracy: {results['accuracy']:.4f}")
+
+        self.log.append("\n" + "="*60)
+
+        QMessageBox.information(self, "Entrenamiento Completado", msg)
 
     def on_error(self, msg):
         QMessageBox.critical(self, "Error", msg)
