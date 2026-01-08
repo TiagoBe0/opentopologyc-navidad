@@ -60,6 +60,10 @@ class AtomVisualizer3DQt(QWidget):
         self.show_axes = True
         self.show_grid = True
 
+        # Control de zoom
+        self.original_limits = None
+        self.zoom_factor = 1.0
+
         self._build_ui()
 
     # ======================================================
@@ -87,6 +91,24 @@ class AtomVisualizer3DQt(QWidget):
         chk_grid.setChecked(True)
         chk_grid.stateChanged.connect(self.toggle_grid)
         first_row.addWidget(chk_grid)
+
+        # Botones de zoom
+        btn_zoom_in = QPushButton("🔍+")
+        btn_zoom_in.setMaximumWidth(50)
+        btn_zoom_in.clicked.connect(self.zoom_in)
+        first_row.addWidget(btn_zoom_in)
+
+        btn_zoom_out = QPushButton("🔍-")
+        btn_zoom_out.setMaximumWidth(50)
+        btn_zoom_out.clicked.connect(self.zoom_out)
+        first_row.addWidget(btn_zoom_out)
+
+        btn_reset_view = QPushButton("🔄")
+        btn_reset_view.setMaximumWidth(50)
+        btn_reset_view.setToolTip("Resetear vista")
+        btn_reset_view.clicked.connect(self.reset_view)
+        first_row.addWidget(btn_reset_view)
+
         cl.addLayout(first_row)
 
         # Segunda fila: Selector de etapas (inicialmente oculto)
@@ -145,6 +167,7 @@ class AtomVisualizer3DQt(QWidget):
         self.colors = None
         self.cluster_labels = None
         self.highlight_cluster = None
+        self.original_limits = None  # Resetear límites para el nuevo dump
         self.plot()
 
     # ======================================================
@@ -239,12 +262,17 @@ class AtomVisualizer3DQt(QWidget):
 
         self.ax.clear()
 
+        # Base kwargs para scatter
         scatter_kwargs = {
             "s": self.atom_size,
-            "alpha": self.alpha,
             "edgecolors": "black",
             "linewidth": 0.25,
         }
+
+        # IMPORTANTE: Solo usar alpha global si NO hay un cluster resaltado
+        # Cuando hay highlight_cluster, los colores ya tienen alphas individuales
+        if self.highlight_cluster is None:
+            scatter_kwargs["alpha"] = self.alpha
 
         if self.colors is not None:
             self.ax.scatter(
@@ -255,11 +283,13 @@ class AtomVisualizer3DQt(QWidget):
                 **scatter_kwargs
             )
         else:
+            # Sin colores custom, usar alpha global
             self.ax.scatter(
                 self.positions[:, 0],
                 self.positions[:, 1],
                 self.positions[:, 2],
                 color="steelblue",
+                alpha=self.alpha,
                 **scatter_kwargs
             )
 
@@ -270,6 +300,14 @@ class AtomVisualizer3DQt(QWidget):
 
         if not self.show_axes:
             self.ax.set_axis_off()
+
+        # Guardar límites originales la primera vez
+        if self.original_limits is None:
+            self.original_limits = {
+                'xlim': self.ax.get_xlim(),
+                'ylim': self.ax.get_ylim(),
+                'zlim': self.ax.get_zlim()
+            }
 
         self.canvas.draw_idle()
 
@@ -291,3 +329,71 @@ class AtomVisualizer3DQt(QWidget):
     def toggle_grid(self, state):
         self.show_grid = state == Qt.Checked
         self.plot()
+
+    # ======================================================
+    # ZOOM
+    # ======================================================
+    def zoom_in(self):
+        """Acercar la vista (zoom in) en un 20%"""
+        if self.positions is None or self.original_limits is None:
+            return
+
+        # Obtener límites actuales
+        xlim = self.ax.get_xlim()
+        ylim = self.ax.get_ylim()
+        zlim = self.ax.get_zlim()
+
+        # Calcular centros
+        x_center = (xlim[0] + xlim[1]) / 2
+        y_center = (ylim[0] + ylim[1]) / 2
+        z_center = (zlim[0] + zlim[1]) / 2
+
+        # Reducir rangos en 20%
+        x_range = (xlim[1] - xlim[0]) * 0.8
+        y_range = (ylim[1] - ylim[0]) * 0.8
+        z_range = (zlim[1] - zlim[0]) * 0.8
+
+        # Aplicar nuevos límites
+        self.ax.set_xlim(x_center - x_range/2, x_center + x_range/2)
+        self.ax.set_ylim(y_center - y_range/2, y_center + y_range/2)
+        self.ax.set_zlim(z_center - z_range/2, z_center + z_range/2)
+
+        self.canvas.draw_idle()
+
+    def zoom_out(self):
+        """Alejar la vista (zoom out) en un 20%"""
+        if self.positions is None or self.original_limits is None:
+            return
+
+        # Obtener límites actuales
+        xlim = self.ax.get_xlim()
+        ylim = self.ax.get_ylim()
+        zlim = self.ax.get_zlim()
+
+        # Calcular centros
+        x_center = (xlim[0] + xlim[1]) / 2
+        y_center = (ylim[0] + ylim[1]) / 2
+        z_center = (zlim[0] + zlim[1]) / 2
+
+        # Aumentar rangos en 20%
+        x_range = (xlim[1] - xlim[0]) * 1.2
+        y_range = (ylim[1] - ylim[0]) * 1.2
+        z_range = (zlim[1] - zlim[0]) * 1.2
+
+        # Aplicar nuevos límites
+        self.ax.set_xlim(x_center - x_range/2, x_center + x_range/2)
+        self.ax.set_ylim(y_center - y_range/2, y_center + y_range/2)
+        self.ax.set_zlim(z_center - z_range/2, z_center + z_range/2)
+
+        self.canvas.draw_idle()
+
+    def reset_view(self):
+        """Resetear la vista a los límites originales"""
+        if self.positions is None or self.original_limits is None:
+            return
+
+        self.ax.set_xlim(self.original_limits['xlim'])
+        self.ax.set_ylim(self.original_limits['ylim'])
+        self.ax.set_zlim(self.original_limits['zlim'])
+
+        self.canvas.draw_idle()
