@@ -63,6 +63,7 @@ class AtomVisualizer3DQt(QWidget):
         # Control de zoom
         self.original_limits = None
         self.zoom_factor = 1.0
+        self.original_ticks = None  # Guardar ticks originales para zoom
 
         self._build_ui()
 
@@ -168,6 +169,7 @@ class AtomVisualizer3DQt(QWidget):
         self.cluster_labels = None
         self.highlight_cluster = None
         self.original_limits = None  # Resetear límites para el nuevo dump
+        self.original_ticks = None  # Resetear ticks para el nuevo dump
         self.plot()
 
     # ======================================================
@@ -301,12 +303,18 @@ class AtomVisualizer3DQt(QWidget):
         if not self.show_axes:
             self.ax.set_axis_off()
 
-        # Guardar límites originales la primera vez
+        # Guardar límites y ticks originales la primera vez
         if self.original_limits is None:
             self.original_limits = {
                 'xlim': self.ax.get_xlim(),
                 'ylim': self.ax.get_ylim(),
                 'zlim': self.ax.get_zlim()
+            }
+            # Guardar ticks originales para mantenerlos fijos durante zoom
+            self.original_ticks = {
+                'xticks': self.ax.get_xticks().copy(),
+                'yticks': self.ax.get_yticks().copy(),
+                'zticks': self.ax.get_zticks().copy()
             }
 
         self.canvas.draw_idle()
@@ -358,6 +366,12 @@ class AtomVisualizer3DQt(QWidget):
         self.ax.set_ylim(y_center - y_range/2, y_center + y_range/2)
         self.ax.set_zlim(z_center - z_range/2, z_center + z_range/2)
 
+        # Mantener ticks originales fijos
+        if self.original_ticks is not None:
+            self.ax.set_xticks(self.original_ticks['xticks'])
+            self.ax.set_yticks(self.original_ticks['yticks'])
+            self.ax.set_zticks(self.original_ticks['zticks'])
+
         self.canvas.draw_idle()
 
     def zoom_out(self):
@@ -385,6 +399,12 @@ class AtomVisualizer3DQt(QWidget):
         self.ax.set_ylim(y_center - y_range/2, y_center + y_range/2)
         self.ax.set_zlim(z_center - z_range/2, z_center + z_range/2)
 
+        # Mantener ticks originales fijos
+        if self.original_ticks is not None:
+            self.ax.set_xticks(self.original_ticks['xticks'])
+            self.ax.set_yticks(self.original_ticks['yticks'])
+            self.ax.set_zticks(self.original_ticks['zticks'])
+
         self.canvas.draw_idle()
 
     def reset_view(self):
@@ -395,5 +415,11 @@ class AtomVisualizer3DQt(QWidget):
         self.ax.set_xlim(self.original_limits['xlim'])
         self.ax.set_ylim(self.original_limits['ylim'])
         self.ax.set_zlim(self.original_limits['zlim'])
+
+        # Restaurar ticks originales
+        if self.original_ticks is not None:
+            self.ax.set_xticks(self.original_ticks['xticks'])
+            self.ax.set_yticks(self.original_ticks['yticks'])
+            self.ax.set_zticks(self.original_ticks['zticks'])
 
         self.canvas.draw_idle()
