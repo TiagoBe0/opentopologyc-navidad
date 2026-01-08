@@ -26,7 +26,7 @@ class ExtractorGUI:
     def __init__(self):
         self.window = tk.Tk()
         self.window.title("OpenTopologyC - Configuración Inicial")
-        self.window.geometry("550x750")  # Aumentado el tamaño
+        self.window.geometry("550x900")  # Aumentado para incluir Wigner-Seitz
         self.window.resizable(True, True)  # Permitir redimensionar
 
         # Variables GUI
@@ -45,6 +45,12 @@ class ExtractorGUI:
         self.var_radial = tk.BooleanVar(value=True)
         self.var_entropy = tk.BooleanVar(value=True)
         self.var_clustering = tk.BooleanVar(value=True)
+
+        # Wigner-Seitz configuration
+        self.var_wigner_seitz = tk.BooleanVar(value=False)
+        self.var_reference_file = tk.StringVar()
+        self.var_ws_use_pbc = tk.BooleanVar(value=True)
+        self.var_ws_use_affine = tk.BooleanVar(value=False)
 
         # Variable para estado del botón Run
         self.running = False
@@ -198,11 +204,72 @@ class ExtractorGUI:
         select_frame = ttk.Frame(section4)
         select_frame.pack(fill="x", pady=(10, 0))
         
-        ttk.Button(select_frame, text="Seleccionar Todos", 
+        ttk.Button(select_frame, text="Seleccionar Todos",
                   command=self.select_all_features, width=15).pack(side="left", padx=(0, 5))
-        ttk.Button(select_frame, text="Deseleccionar Todos", 
+        ttk.Button(select_frame, text="Deseleccionar Todos",
                   command=self.deselect_all_features, width=15).pack(side="left")
-        
+
+        # --------------------------------------
+        # SECCIÓN 4.5: WIGNER-SEITZ
+        # --------------------------------------
+        section_ws = ttk.LabelFrame(content_frame, text="Análisis Wigner-Seitz (Comparación)", padding=10)
+        section_ws.pack(fill="x", pady=(0, 15))
+
+        # Checkbox para habilitar Wigner-Seitz
+        ws_enable_frame = ttk.Frame(section_ws)
+        ws_enable_frame.pack(fill="x", pady=(0, 10))
+
+        ttk.Checkbutton(
+            ws_enable_frame,
+            text="Habilitar análisis Wigner-Seitz",
+            variable=self.var_wigner_seitz,
+            command=self.toggle_wigner_seitz
+        ).pack(side="left")
+
+        # Archivo de referencia
+        self.ws_ref_frame = ttk.Frame(section_ws)
+        self.ws_ref_frame.pack(fill="x", pady=(0, 10))
+
+        ttk.Label(self.ws_ref_frame, text="Archivo de referencia:", font=("Arial", 9)).pack(anchor="w", pady=(0, 3))
+
+        ws_ref_entry_frame = ttk.Frame(self.ws_ref_frame)
+        ws_ref_entry_frame.pack(fill="x")
+
+        self.ws_ref_entry = ttk.Entry(ws_ref_entry_frame, textvariable=self.var_reference_file, width=50, state="disabled")
+        self.ws_ref_entry.pack(side="left", fill="x", expand=True, padx=(0, 5))
+
+        self.ws_ref_button = ttk.Button(ws_ref_entry_frame, text="Buscar", command=self.select_reference_file, width=10, state="disabled")
+        self.ws_ref_button.pack(side="right")
+
+        # Opciones de Wigner-Seitz
+        self.ws_options_frame = ttk.Frame(section_ws)
+        self.ws_options_frame.pack(fill="x", pady=(0, 5))
+
+        self.ws_pbc_check = ttk.Checkbutton(
+            self.ws_options_frame,
+            text="Condiciones Periódicas (PBC)",
+            variable=self.var_ws_use_pbc,
+            state="disabled"
+        )
+        self.ws_pbc_check.pack(side="left", padx=(0, 15))
+
+        self.ws_affine_check = ttk.Checkbutton(
+            self.ws_options_frame,
+            text="Mapeo Afín (strain > 5%)",
+            variable=self.var_ws_use_affine,
+            state="disabled"
+        )
+        self.ws_affine_check.pack(side="left")
+
+        # Info de Wigner-Seitz
+        ws_info = ttk.Label(
+            section_ws,
+            text="Nota: Requiere un archivo de referencia (estructura perfecta sin defectos)",
+            font=("Arial", 8, "italic"),
+            foreground="gray"
+        )
+        ws_info.pack(anchor="w")
+
         # --------------------------------------
         # SECCIÓN 5: BOTONES DE ACCIÓN
         # --------------------------------------
@@ -288,6 +355,29 @@ class ExtractorGUI:
         self.var_entropy.set(False)
         self.var_clustering.set(False)
 
+    def toggle_wigner_seitz(self):
+        """Habilita/deshabilita opciones de Wigner-Seitz"""
+        if self.var_wigner_seitz.get():
+            self.ws_ref_entry.config(state="normal")
+            self.ws_ref_button.config(state="normal")
+            self.ws_pbc_check.config(state="normal")
+            self.ws_affine_check.config(state="normal")
+        else:
+            self.ws_ref_entry.config(state="disabled")
+            self.ws_ref_button.config(state="disabled")
+            self.ws_pbc_check.config(state="disabled")
+            self.ws_affine_check.config(state="disabled")
+
+    def select_reference_file(self):
+        """Selecciona archivo de referencia para Wigner-Seitz"""
+        filepath = filedialog.askopenfilename(
+            title="Seleccionar archivo de referencia",
+            filetypes=[("LAMMPS dump", "*.dump"), ("All files", "*.*")]
+        )
+        if filepath:
+            self.var_reference_file.set(filepath)
+            self.update_status(f"Referencia: {os.path.basename(filepath)}")
+
     # ---------------------------------------------------
     # Acciones principales
     # ---------------------------------------------------
@@ -317,6 +407,11 @@ class ExtractorGUI:
                 messagebox.showerror("Error", "Debe seleccionar un tipo de red")
                 return
 
+            # Validar Wigner-Seitz si está habilitado
+            if self.var_wigner_seitz.get() and not self.var_reference_file.get():
+                messagebox.showerror("Error", "Wigner-Seitz requiere un archivo de referencia")
+                return
+
             # Crear configuración extendida
             cfg = ExtractorConfig(
                 input_dir=self.var_input_dir.get(),
@@ -332,6 +427,11 @@ class ExtractorGUI:
                 compute_radial_features=self.var_radial.get(),
                 compute_entropy_features=self.var_entropy.get(),
                 compute_clustering_features=self.var_clustering.get(),
+                # Wigner-Seitz config
+                compute_wigner_seitz=self.var_wigner_seitz.get(),
+                reference_file=self.var_reference_file.get(),
+                ws_use_pbc=self.var_ws_use_pbc.get(),
+                ws_use_affine=self.var_ws_use_affine.get(),
             )
             cfg.validate()
 
@@ -373,9 +473,18 @@ class ExtractorGUI:
                 self.var_radial.set(cfg.compute_radial_features)
                 self.var_entropy.set(cfg.compute_entropy_features)
                 self.var_clustering.set(cfg.compute_clustering_features)
-                
+
+                # Wigner-Seitz config
+                self.var_wigner_seitz.set(getattr(cfg, 'compute_wigner_seitz', False))
+                self.var_reference_file.set(getattr(cfg, 'reference_file', ''))
+                self.var_ws_use_pbc.set(getattr(cfg, 'ws_use_pbc', True))
+                self.var_ws_use_affine.set(getattr(cfg, 'ws_use_affine', False))
+
                 # Actualizar estado del campo surface distance
                 self.toggle_surface_distance()
+
+                # Actualizar estado de Wigner-Seitz
+                self.toggle_wigner_seitz()
                 
                 # Guardar como archivo por defecto
                 cfg.save_json("config_extractor.json")

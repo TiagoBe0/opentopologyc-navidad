@@ -29,7 +29,12 @@ class ExtractorConfig:
     compute_radial_features: bool = True
     compute_entropy_features: bool = True
     compute_clustering_features: bool = True
-    
+
+    # Wigner-Seitz configuration
+    compute_wigner_seitz: bool = False          # Habilitar analisis Wigner-Seitz
+    reference_file: str = ""                    # Archivo de referencia para Wigner-Seitz
+    ws_use_pbc: bool = True                     # Usar condiciones periodicas
+    ws_use_affine: bool = False                 # Usar mapeo afin (para strain > 5%)
 
     def validate(self):
         """Validaciones simples para evitar errores de usuario."""
