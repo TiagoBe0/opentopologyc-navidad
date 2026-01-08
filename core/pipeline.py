@@ -111,24 +111,29 @@ class ExtractorPipeline:
         df.to_csv(output_csv)
 
         print(f"Dataset guardado en:\n{output_csv}")
-        #etapa de entrenamiento
-        # Uso programático
-        trainer = RandomForestTrainer(random_state=42)
 
-        # Cargar datos
-        X, y = trainer.load_data("dataset.csv")
+        # Etapa de entrenamiento (opcional, si hay columna n_vacancies)
+        if 'n_vacancies' in df.columns:
+            print("\n🤖 Iniciando entrenamiento automático...")
+            trainer = RandomForestTrainer(random_state=42)
 
-        # Entrenar
-        trainer.train(X, y, test_size=0.2)
+            # Cargar datos usando el CSV generado
+            X, y = trainer.load_data(str(output_csv))
 
-        # Evaluar
-        metrics = trainer.evaluate()
+            # Entrenar
+            trainer.train(X, y, test_size=0.2)
 
-        # Analizar importancia
-        importance_df = trainer.analyze_feature_importance(top_n=20)
+            # Evaluar
+            metrics = trainer.evaluate()
 
-        # Guardar
-        trainer.save_model("model_rf")
+            # Analizar importancia
+            importance_df = trainer.analyze_feature_importance(top_n=20)
+
+            # Guardar modelo en el mismo directorio
+            model_output_dir = input_dir / "modelo_rf"
+            trainer.save_model(str(model_output_dir))
+        else:
+            print("\n⚠️  No se encontró 'n_vacancies' en los datos. Omitiendo entrenamiento.")
 
 
         return df

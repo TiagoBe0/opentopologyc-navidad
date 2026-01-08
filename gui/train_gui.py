@@ -12,9 +12,8 @@ from pathlib import Path
 import warnings
 warnings.filterwarnings('ignore')
 
-# Agregar ruta al módulo train_step
-sys.path.append(str(Path(__file__).parent.parent.parent))
-from train_step import RandomForestTrainer
+# Importar el módulo train_step desde core
+from core.train_step import RandomForestTrainer
 
 
 class TrainingGUI:

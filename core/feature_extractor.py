@@ -37,7 +37,7 @@ class FeatureExtractor:
         try:
             pca = PCA(n_components=3, svd_solver='covariance_eigh')
             aligned = pca.fit_transform(centered)
-        except:
+        except (ValueError, np.linalg.LinAlgError):
             pca = PCA(n_components=3, svd_solver='auto')
             aligned = pca.fit_transform(centered)
         
@@ -141,7 +141,7 @@ class FeatureExtractor:
             except Exception as e:
                 features['grid_moi_1'] = 0.0
                 features['grid_moi_2'] = 0.0
-                features['grid_moi_3'] = float(eigenvalues[2])
+                features['grid_moi_3'] = 0.0
         else:
             features['grid_moi_1'] = 0.0
             features['grid_moi_2'] = 0.0

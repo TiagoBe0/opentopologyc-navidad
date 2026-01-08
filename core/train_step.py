@@ -49,7 +49,6 @@ class RandomForestTrainer:
         self.logger = logger or logging.getLogger(__name__)
         
         # Atributos que se llenarán durante el entrenamiento
-        self.name_file=str('db_test_pequeña/model_rf.pkl')
         self.pipeline = None
         self.model = None
         self.X_train = None
@@ -75,8 +74,8 @@ class RandomForestTrainer:
         Raises:
             ValueError: Si no se encuentra 'n_vacancies' en el dataset
         """
-        self.logger.info(f"📂 Cargando dataset: {self.name_file}")
-        df = pd.read_csv(self.name_file, index_col='file')
+        self.logger.info(f"📂 Cargando dataset: {csv_path}")
+        df = pd.read_csv(csv_path, index_col='file')
         
         self.logger.info(f"   Muestras: {df.shape[0]} | Columnas: {df.shape[1]}")
         
@@ -311,7 +310,7 @@ class RandomForestTrainer:
                     actual_feature_names = self.feature_names
             else:
                 actual_feature_names = self.feature_names
-        except:
+        except (AttributeError, TypeError):
             actual_feature_names = self.feature_names
         
         # Verificar que las longitudes coincidan
