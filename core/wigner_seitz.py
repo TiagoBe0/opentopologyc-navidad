@@ -130,14 +130,90 @@ class WignerSeitzAnalyzer:
         self.occupancy = None
         self.site_assignment = None
 
-        # Aplicar PBC si es necesario
+        # Validar compatibilidad de las estructuras
+        self._validate_structures()
+
+        # IMPORTANTE: Aplicar mapeo afin ANTES de PBC
+        # El mapeo afin escala las coordenadas, y debe hacerse antes de centrar
+        if use_affine_mapping:
+            self._apply_affine_mapping()
+
+        # Aplicar PBC despues del mapeo afin
         if use_pbc:
             self.reference = ref_box.apply_pbc(self.reference)
             self.defective = def_box.apply_pbc(self.defective)
 
-        # Aplicar mapeo afin si hay strain significativo
-        if use_affine_mapping:
-            self._apply_affine_mapping()
+    def _validate_structures(self):
+        """
+        Valida que las estructuras sean compatibles para el analisis.
+
+        Raises:
+            ValueError: Si las estructuras no son validas o compatibles
+        """
+        # Validar que las estructuras no esten vacias
+        if len(self.reference) == 0:
+            raise ValueError("La estructura de referencia esta vacia")
+
+        if len(self.defective) == 0:
+            raise ValueError("La estructura defectuosa esta vacia")
+
+        # Validar dimensiones de las cajas
+        if self.ref_box.lx <= 0 or self.ref_box.ly <= 0 or self.ref_box.lz <= 0:
+            raise ValueError(
+                f"Dimensiones invalidas de caja de referencia: "
+                f"lx={self.ref_box.lx}, ly={self.ref_box.ly}, lz={self.ref_box.lz}"
+            )
+
+        if self.def_box.lx <= 0 or self.def_box.ly <= 0 or self.def_box.lz <= 0:
+            raise ValueError(
+                f"Dimensiones invalidas de caja defectuosa: "
+                f"lx={self.def_box.lx}, ly={self.def_box.ly}, lz={self.def_box.lz}"
+            )
+
+        # Advertir si el numero de atomos es muy diferente
+        n_ref = len(self.reference)
+        n_def = len(self.defective)
+        atom_diff_ratio = abs(n_ref - n_def) / n_ref if n_ref > 0 else 0
+
+        if atom_diff_ratio > 0.5:
+            import warnings
+            warnings.warn(
+                f"Diferencia significativa en numero de atomos: "
+                f"referencia={n_ref}, defectuoso={n_def} "
+                f"({atom_diff_ratio*100:.1f}% diferencia). "
+                f"Verifique que las estructuras sean compatibles.",
+                UserWarning
+            )
+
+        # Advertir si hay strain significativo sin mapeo afin
+        strain = self.def_box.get_strain(self.ref_box)
+        if abs(strain) > 0.05 and not self.use_affine_mapping:
+            import warnings
+            warnings.warn(
+                f"Strain volumetrico significativo detectado ({strain*100:.2f}%) "
+                f"sin mapeo afin activado. Considere activar use_affine_mapping=True "
+                f"para mejores resultados.",
+                UserWarning
+            )
+
+        # Validar que las dimensiones de las cajas sean razonablemente similares
+        dim_ratios = [
+            self.def_box.lx / self.ref_box.lx,
+            self.def_box.ly / self.ref_box.ly,
+            self.def_box.lz / self.ref_box.lz
+        ]
+
+        max_ratio = max(dim_ratios)
+        min_ratio = min(dim_ratios)
+
+        if max_ratio > 2.0 or min_ratio < 0.5:
+            import warnings
+            warnings.warn(
+                f"Las dimensiones de las cajas son muy diferentes: "
+                f"ratios = {dim_ratios}. "
+                f"Verifique que las estructuras sean del mismo sistema.",
+                UserWarning
+            )
 
     def _apply_affine_mapping(self):
         """Aplica mapeo afin para compensar strain uniforme"""
@@ -194,16 +270,47 @@ class WignerSeitzAnalyzer:
         # Identificar defectos
         vacancies = np.where(self.occupancy == 0)[0]
 
-        # Intersticiales: atomos en sitios con ocupacion > 1
+        # Calcular umbral de distancia para intersticiales
+        # Usamos la mitad de la distancia promedio entre sitios de red
+        volume = self.ref_box.get_volume()
+        avg_site_distance = (volume / n_ref) ** (1.0 / 3.0) if n_ref > 0 else 1.0
+        distance_threshold = 0.5 * avg_site_distance
+
+        # Intersticiales: dos criterios
+        # 1. Atomos en sitios con ocupacion > 1
+        # 2. Atomos muy lejos de su sitio mas cercano
         interstitial_atoms = []
+        interstitial_distances = []
+
+        # Criterio 1: Multiples atomos en un sitio
         for site_idx in np.where(self.occupancy > 1)[0]:
             # Encontrar atomos asignados a este sitio
             atoms_at_site = np.where(self.site_assignment == site_idx)[0]
             # El primero es el "legitimo", los demas son intersticiales
             if len(atoms_at_site) > 1:
                 interstitial_atoms.extend(atoms_at_site[1:].tolist())
+                # Registrar distancias para los intersticiales
+                for atom_idx in atoms_at_site[1:]:
+                    diff = self.defective[atom_idx] - self.reference[site_idx]
+                    if self.use_pbc:
+                        diff = self.def_box.minimum_image(diff)
+                    dist = np.linalg.norm(diff)
+                    interstitial_distances.append(dist)
+
+        # Criterio 2: Atomos muy lejos de su sitio asignado
+        for i in range(n_def):
+            site_idx = self.site_assignment[i]
+            if site_idx >= 0 and i not in interstitial_atoms:
+                diff = self.defective[i] - self.reference[site_idx]
+                if self.use_pbc:
+                    diff = self.def_box.minimum_image(diff)
+                dist = np.linalg.norm(diff)
+                if dist > distance_threshold:
+                    interstitial_atoms.append(i)
+                    interstitial_distances.append(dist)
 
         interstitial_atoms = np.array(interstitial_atoms, dtype=int)
+        interstitial_distances = np.array(interstitial_distances) if interstitial_distances else np.array([])
 
         # Calcular concentraciones
         vacancy_concentration = len(vacancies) / n_ref if n_ref > 0 else 0
@@ -217,6 +324,8 @@ class WignerSeitzAnalyzer:
             'n_interstitials': len(interstitial_atoms),
             'vacancies': vacancies,
             'interstitial_atoms': interstitial_atoms,
+            'interstitial_distances': interstitial_distances,
+            'distance_threshold': distance_threshold,
             'occupancy': self.occupancy,
             'site_assignment': self.site_assignment,
             'vacancy_concentration': vacancy_concentration,
@@ -281,13 +390,28 @@ def read_lammps_dump(filepath: str) -> Tuple[np.ndarray, SimulationBox]:
 
     Returns:
         (positions, box): Posiciones y caja de simulacion
+
+    Raises:
+        FileNotFoundError: Si el archivo no existe
+        ValueError: Si el archivo esta malformado o no contiene datos validos
     """
+    # Validar que el archivo existe
+    filepath_obj = Path(filepath)
+    if not filepath_obj.exists():
+        raise FileNotFoundError(f"Archivo LAMMPS no encontrado: {filepath}")
+
+    if not filepath_obj.is_file():
+        raise ValueError(f"La ruta no es un archivo: {filepath}")
+
     positions = []
     box_bounds = {}
     n_atoms = 0
 
-    with open(filepath, 'r') as f:
-        lines = f.readlines()
+    try:
+        with open(filepath, 'r') as f:
+            lines = f.readlines()
+    except Exception as e:
+        raise ValueError(f"Error al leer el archivo {filepath}: {e}")
 
     i = 0
     while i < len(lines):
@@ -314,20 +438,32 @@ def read_lammps_dump(filepath: str) -> Tuple[np.ndarray, SimulationBox]:
             # Determinar columnas
             header_parts = line.split()[2:]  # Skip "ITEM: ATOMS"
 
-            # Buscar indices de x, y, z
+            # Buscar indices de x, y, z y guardar el tipo de coordenada
             x_idx = y_idx = z_idx = None
+            x_type = y_type = z_type = None
+
             for j, col in enumerate(header_parts):
                 if col in ['x', 'xu', 'xs']:
                     x_idx = j
+                    x_type = col
                 elif col in ['y', 'yu', 'ys']:
                     y_idx = j
+                    y_type = col
                 elif col in ['z', 'zu', 'zs']:
                     z_idx = j
+                    z_type = col
 
-            # Si no encontramos las columnas, usar las columnas 2, 3, 4 por defecto
-            # (asumiendo formato: id type x y z)
-            if x_idx is None:
-                x_idx, y_idx, z_idx = 2, 3, 4
+            # Validar que se encontraron todas las coordenadas
+            if x_idx is None or y_idx is None or z_idx is None:
+                raise ValueError(
+                    f"No se encontraron columnas de posicion en el header LAMMPS.\n"
+                    f"Columnas encontradas: {header_parts}\n"
+                    f"Se esperaban columnas: x/xu/xs, y/yu/ys, z/zu/zs"
+                )
+
+            # Validar que tenemos los limites de la caja (necesarios para xs, ys, zs)
+            if not box_bounds:
+                raise ValueError("No se encontraron los limites de la caja (BOX BOUNDS)")
 
             # Leer posiciones
             for _ in range(n_atoms):
@@ -339,9 +475,45 @@ def read_lammps_dump(filepath: str) -> Tuple[np.ndarray, SimulationBox]:
                     x = float(parts[x_idx])
                     y = float(parts[y_idx])
                     z = float(parts[z_idx])
+
+                    # Convertir coordenadas escaladas a coordenadas reales
+                    if x_type == 'xs':
+                        x = box_bounds['xlo'] + x * (box_bounds['xhi'] - box_bounds['xlo'])
+                    if y_type == 'ys':
+                        y = box_bounds['ylo'] + y * (box_bounds['yhi'] - box_bounds['ylo'])
+                    if z_type == 'zs':
+                        z = box_bounds['zlo'] + z * (box_bounds['zhi'] - box_bounds['zlo'])
+
                     positions.append([x, y, z])
 
         i += 1
+
+    # Validar que se leyeron datos validos
+    if not box_bounds:
+        raise ValueError(
+            f"No se encontraron limites de caja (BOX BOUNDS) en {filepath}. "
+            f"Verifique que sea un archivo LAMMPS dump valido."
+        )
+
+    if n_atoms == 0:
+        raise ValueError(
+            f"No se encontro el numero de atomos en {filepath}. "
+            f"Verifique que sea un archivo LAMMPS dump valido."
+        )
+
+    if len(positions) == 0:
+        raise ValueError(
+            f"No se leyeron posiciones atomicas de {filepath}. "
+            f"Verifique el formato del archivo."
+        )
+
+    if len(positions) != n_atoms:
+        import warnings
+        warnings.warn(
+            f"Discrepancia en numero de atomos: header indica {n_atoms}, "
+            f"pero se leyeron {len(positions)} posiciones.",
+            UserWarning
+        )
 
     positions = np.array(positions)
     box = SimulationBox(**box_bounds)
@@ -363,20 +535,34 @@ def count_vacancies_wigner_seitz(reference_file: str, defective_file: str,
 
     Returns:
         Diccionario con resultados del analisis
+
+    Raises:
+        FileNotFoundError: Si alguno de los archivos no existe
+        ValueError: Si los archivos estan malformados o las estructuras son incompatibles
     """
-    # Leer archivos
-    ref_pos, ref_box = read_lammps_dump(reference_file)
-    def_pos, def_box = read_lammps_dump(defective_file)
+    try:
+        # Leer archivos
+        ref_pos, ref_box = read_lammps_dump(reference_file)
+    except Exception as e:
+        raise ValueError(f"Error al leer archivo de referencia: {e}")
 
-    # Crear analizador
-    analyzer = WignerSeitzAnalyzer(
-        ref_pos, def_pos, ref_box, def_box,
-        use_pbc=use_pbc,
-        use_affine_mapping=use_affine
-    )
+    try:
+        def_pos, def_box = read_lammps_dump(defective_file)
+    except Exception as e:
+        raise ValueError(f"Error al leer archivo defectuoso: {e}")
 
-    # Ejecutar analisis
-    results = analyzer.analyze()
+    try:
+        # Crear analizador
+        analyzer = WignerSeitzAnalyzer(
+            ref_pos, def_pos, ref_box, def_box,
+            use_pbc=use_pbc,
+            use_affine_mapping=use_affine
+        )
+
+        # Ejecutar analisis
+        results = analyzer.analyze()
+    except Exception as e:
+        raise ValueError(f"Error en el analisis Wigner-Seitz: {e}")
 
     return results
 
