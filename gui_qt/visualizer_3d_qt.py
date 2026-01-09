@@ -15,11 +15,16 @@ Visualizador 3D de átomos en Qt + Matplotlib
 
 # CRÍTICO: Configurar QT_API ANTES de importar matplotlib
 import os
+import sys
+
+# Forzar backend PyQt5
 os.environ['QT_API'] = 'pyqt5'
+os.environ['MPLBACKEND'] = 'Qt5Agg'
 
 import numpy as np
+
+# Configurar matplotlib ANTES de cualquier otra importación
 import matplotlib
-# IMPORTANTE: Forzar backend PyQt5 (no PySide6)
 matplotlib.use("Qt5Agg", force=True)
 
 from PyQt5.QtWidgets import (
@@ -29,8 +34,21 @@ from PyQt5.QtWidgets import (
 )
 from PyQt5.QtCore import Qt
 
-# Importar específicamente desde backend PyQt5
-from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg as FigureCanvas
+# Importar Canvas de matplotlib
+try:
+    from matplotlib.backends.backend_qt5agg import FigureCanvasQTAgg
+    FigureCanvas = FigureCanvasQTAgg
+except ImportError as e:
+    print(f"Error importando FigureCanvasQTAgg: {e}")
+    print("Intentando importación alternativa...")
+    try:
+        from matplotlib.backends.backend_qt5agg import FigureCanvas
+    except ImportError:
+        raise ImportError(
+            "No se pudo importar FigureCanvas de matplotlib. "
+            "Verifica la instalación de matplotlib y PyQt5."
+        )
+
 from matplotlib.figure import Figure
 import matplotlib.cm as cm
 
@@ -126,6 +144,14 @@ class AtomVisualizer3DQt(QWidget):
         self.fig = Figure(figsize=(7, 6))
         self.canvas = FigureCanvas(self.fig)
         self.ax = self.fig.add_subplot(111, projection="3d")
+
+        # Verificar que canvas es un QWidget
+        if not isinstance(self.canvas, QWidget):
+            raise TypeError(
+                f"FigureCanvas no es un QWidget. Tipo: {type(self.canvas)}. "
+                "Puede haber un conflicto de backends de matplotlib. "
+                "Ejecuta: python scripts/fix_qt_backend.py"
+            )
 
         layout.addWidget(self.canvas)
 
