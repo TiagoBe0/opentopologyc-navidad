@@ -160,7 +160,7 @@ class AtomVisualizer3DQt(QWidget):
     # ======================================================
     def load_dump_dialog(self):
         path, _ = QFileDialog.getOpenFileName(
-            self, "Seleccionar dump", "", "Dump (*.dump)"
+            self, "Seleccionar dump", "", "Dump files (*.dump);;All files (*)"
         )
         if path:
             self.load_dump_from_path(path)
