@@ -14,8 +14,8 @@ Uso:
 import sys
 from pathlib import Path
 
-# Agregar directorio raíz al path
-root_dir = Path(__file__).parent
+# Agregar directorio raíz al path (scripts/ -> raíz del proyecto)
+root_dir = Path(__file__).parent.parent
 sys.path.insert(0, str(root_dir))
 
 from core.pipeline import ExtractorPipeline
