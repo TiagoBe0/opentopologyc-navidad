@@ -294,7 +294,7 @@ class PredictionGUIQt(BaseWindow):
         root.addLayout(controls, 1)
 
         # ---------- PANEL DERECHO: VISUALIZADOR ----------
-        from gui_qt.visualizer_3d_qt import AtomVisualizer3DQt
+        from .visualizer_3d_qt import AtomVisualizer3DQt
         self.visualizer = AtomVisualizer3DQt()
         root.addWidget(self.visualizer, 3)
 
