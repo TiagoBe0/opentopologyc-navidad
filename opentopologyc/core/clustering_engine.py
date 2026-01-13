@@ -24,7 +24,7 @@ except ImportError:
 
 # Importar clustering jerárquico mejorado
 try:
-    from core.hierarchical_clustering import apply_hierarchical_clustering, HierarchicalMeanShiftClusterer
+    from .hierarchical_clustering import apply_hierarchical_clustering, HierarchicalMeanShiftClusterer
     HIERARCHICAL_AVAILABLE = True
 except ImportError:
     HIERARCHICAL_AVAILABLE = False
