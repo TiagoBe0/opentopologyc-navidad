@@ -5,15 +5,11 @@
 import tkinter as tk
 from tkinter import ttk, messagebox
 import sys
-from pathlib import Path
-
-# Agregar rutas
-sys.path.append(str(Path(__file__).parent.parent))
 
 try:
-    from gui.gui_extractor import ExtractorGUI
-    from gui.train_gui import TrainingGUI
-    from gui.prediction_gui import PredictionGUI
+    from .gui_extractor import ExtractorGUI
+    from .train_gui import TrainingGUI
+    from .prediction_gui import PredictionGUI
 except ImportError as e:
     print(f"Error importando módulos: {e}")
     sys.exit(1)

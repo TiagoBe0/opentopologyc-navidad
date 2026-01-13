@@ -31,12 +31,12 @@ warnings.filterwarnings('ignore', message='.*Incompatible version of the Qt.*')
 warnings.filterwarnings('ignore', message='.*Matplotlib is using.*')
 
 # Agregar el directorio raíz al PYTHONPATH
-root_dir = Path(__file__).parent
+root_dir = Path(__file__).parent.parent  # Subir un nivel desde scripts/ a la raíz
 sys.path.insert(0, str(root_dir))
 
 from PySide6.QtWidgets import QApplication
-from gui_qt.main_window import MainWindow
-from core.logger import setup_logger, log_session_start, log_session_end
+from opentopologyc.gui_qt.main_window import MainWindow
+from opentopologyc.core.logger import setup_logger, log_session_start, log_session_end
 
 
 def main():

@@ -18,14 +18,14 @@ import sys
 from pathlib import Path
 
 # Agregar directorio raíz al path
-root_dir = Path(__file__).parent
+root_dir = Path(__file__).parent.parent  # Subir un nivel desde scripts/ a la raíz
 sys.path.insert(0, str(root_dir))
 
-from core.pipeline import ExtractorPipeline
-from core.training_pipeline import TrainingPipeline
-from core.prediction_pipeline import PredictionPipeline
-from core.model_manager import ModelManager
-from config.extractor_config import ExtractorConfig
+from opentopologyc.core.pipeline import ExtractorPipeline
+from opentopologyc.core.training_pipeline import TrainingPipeline
+from opentopologyc.core.prediction_pipeline import PredictionPipeline
+from opentopologyc.core.model_manager import ModelManager
+from opentopologyc.config.extractor_config import ExtractorConfig
 
 
 def print_section(title):

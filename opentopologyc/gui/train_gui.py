@@ -7,13 +7,10 @@ from tkinter import filedialog, messagebox, scrolledtext
 from tkinter import ttk
 import threading
 import os
-import sys
 from pathlib import Path
 import warnings
 warnings.filterwarnings('ignore')
 
-# Agregar ruta al módulo train_step
-sys.path.append(str(Path(__file__).parent.parent))
 from ..core.train_step import RandomForestTrainer
 
 

@@ -6,13 +6,10 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, scrolledtext
 from tkinter import ttk
 import os
-import sys
 from pathlib import Path
 import warnings
 warnings.filterwarnings('ignore')
 
-# Agregar ruta
-sys.path.append(str(Path(__file__).parent.parent))
 from ..config.extractor_config import ExtractorConfig
 from ..core.prediction_pipeline import PredictionPipeline
 
