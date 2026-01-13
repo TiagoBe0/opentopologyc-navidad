@@ -23,9 +23,9 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QTimer
 
-from gui_qt.base_window import BaseWindow
-from core.pipeline import ExtractorPipeline
-from config.extractor_config import ExtractorConfig
+from .base_window import BaseWindow
+from ..core.pipeline import ExtractorPipeline
+from ..config.extractor_config import ExtractorConfig
 from pathlib import Path
 import pandas as pd
 

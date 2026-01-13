@@ -14,7 +14,7 @@ warnings.filterwarnings('ignore')
 
 # Agregar ruta al módulo train_step
 sys.path.append(str(Path(__file__).parent.parent))
-from core.train_step import RandomForestTrainer
+from ..core.train_step import RandomForestTrainer
 
 
 class TrainingGUI:

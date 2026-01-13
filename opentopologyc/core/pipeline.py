@@ -4,11 +4,11 @@ from pathlib import Path
 import pandas as pd
 from tqdm import tqdm
 import numpy as np
-from core.loader import DumpLoader
-from core.surface_extractor import SurfaceExtractor
-from config.extractor_config import ExtractorConfig
-from core.feature_extractor import FeatureExtractor
-from core.normalizer import PositionNormalizer
+from .loader import DumpLoader
+from .surface_extractor import SurfaceExtractor
+from ..config.extractor_config import ExtractorConfig
+from .feature_extractor import FeatureExtractor
+from .normalizer import PositionNormalizer
 
 class ExtractorPipeline:
     """

@@ -20,13 +20,13 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QThread, Signal
 
-from gui_qt.base_window import BaseWindow
-from core.alpha_shape_filter import filter_surface_atoms, LAMMPSDumpParser
-from core.clustering_engine import cluster_surface_atoms
-from core.loader import DumpLoader
-from core.normalizer import PositionNormalizer
-from core.feature_extractor import FeatureExtractor
-from config.extractor_config import ExtractorConfig
+from .base_window import BaseWindow
+from ..core.alpha_shape_filter import filter_surface_atoms, LAMMPSDumpParser
+from ..core.clustering_engine import cluster_surface_atoms
+from ..core.loader import DumpLoader
+from ..core.normalizer import PositionNormalizer
+from ..core.feature_extractor import FeatureExtractor
+from ..config.extractor_config import ExtractorConfig
 import joblib
 
 

@@ -11,8 +11,8 @@ from ovito.modifiers import (
     AffineTransformationModifier
 )
 
-from config.extractor_config import ExtractorConfig
-from core.dump_validator import DumpValidator
+from ..config.extractor_config import ExtractorConfig
+from .dump_validator import DumpValidator
 
 
 class SurfaceExtractor:

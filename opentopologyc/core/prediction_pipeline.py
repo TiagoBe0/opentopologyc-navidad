@@ -17,12 +17,12 @@ import joblib
 import pandas as pd
 import numpy as np
 
-from core.alpha_shape_filter import filter_surface_atoms, LAMMPSDumpParser
-from core.clustering_engine import cluster_surface_atoms
-from core.loader import DumpLoader
-from core.normalizer import PositionNormalizer
-from core.feature_extractor import FeatureExtractor
-from config.extractor_config import ExtractorConfig
+from .alpha_shape_filter import filter_surface_atoms, LAMMPSDumpParser
+from .clustering_engine import cluster_surface_atoms
+from .loader import DumpLoader
+from .normalizer import PositionNormalizer
+from .feature_extractor import FeatureExtractor
+from ..config.extractor_config import ExtractorConfig
 
 
 class PredictionPipeline:

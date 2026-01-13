@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import matplotlib.pyplot as plt
 from pathlib import Path
-from core.model_manager import ModelManager
+from .model_manager import ModelManager
 
 
 class TrainingPipeline:

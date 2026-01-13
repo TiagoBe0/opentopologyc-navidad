@@ -34,7 +34,7 @@ from matplotlib.backends.backend_qtagg import FigureCanvasQTAgg as FigureCanvas
 from matplotlib.figure import Figure
 import matplotlib.cm as cm
 
-from core.alpha_shape_filter import LAMMPSDumpParser
+from ..core.alpha_shape_filter import LAMMPSDumpParser
 
 
 class AtomVisualizer3DQt(QWidget):

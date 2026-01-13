@@ -6,16 +6,20 @@ from tkinter import ttk
 import threading
 import os
 import warnings
+from pathlib import Path
 
 # Ignorar warning de OVITO temporalmente
 warnings.filterwarnings('ignore', message='.*OVITO.*PyPI')
 
-from config.extractor_config import ExtractorConfig
+from ..config.extractor_config import ExtractorConfig
 try:
-    from core.pipeline import ExtractorPipeline  # Importar el pipeline
+    from ..core.pipeline import ExtractorPipeline  # Importar el pipeline
 except ImportError as e:
     print(f"Advertencia: No se pudo importar ExtractorPipeline: {e}")
     ExtractorPipeline = None
+
+# Ruta del archivo de configuración por defecto
+CONFIG_FILE_PATH = Path(__file__).parent.parent / "config" / "str(CONFIG_FILE_PATH)"
 
 
 class ExtractorGUI:
@@ -336,7 +340,7 @@ class ExtractorGUI:
             cfg.validate()
 
             # Guardar configuración
-            cfg.save_json("config_extractor.json")
+            cfg.save_json("str(CONFIG_FILE_PATH)")
             
             messagebox.showinfo("Éxito", "Configuración creada y guardada correctamente")
             
@@ -378,7 +382,7 @@ class ExtractorGUI:
                 self.toggle_surface_distance()
                 
                 # Guardar como archivo por defecto
-                cfg.save_json("config_extractor.json")
+                cfg.save_json("str(CONFIG_FILE_PATH)")
                 
                 messagebox.showinfo("Éxito", "Configuración cargada correctamente")
                 
@@ -395,7 +399,7 @@ class ExtractorGUI:
             return
 
         # Verificar que existe configuración
-        if not os.path.exists("config_extractor.json"):
+        if not os.path.exists("str(CONFIG_FILE_PATH)"):
             messagebox.showerror("Error", "Primero debe crear o cargar una configuración")
             return
 
@@ -433,7 +437,7 @@ class ExtractorGUI:
         """Función que ejecuta el pipeline directamente"""
         try:
             # Cargar configuración
-            cfg = ExtractorConfig.load_json("config_extractor.json")
+            cfg = ExtractorConfig.load_json("str(CONFIG_FILE_PATH)")
 
             # Crear y ejecutar pipeline
             pipeline = ExtractorPipeline(cfg)

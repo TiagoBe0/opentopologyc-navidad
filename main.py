@@ -9,7 +9,7 @@ Lanza la interfaz gráfica principal que permite acceder a:
 - Entrenamiento de Modelos
 """
 
-from gui.main_gui import MainGUI
+from opentopologyc.gui.main_gui import MainGUI
 
 
 def main():

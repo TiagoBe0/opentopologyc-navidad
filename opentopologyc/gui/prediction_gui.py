@@ -13,8 +13,8 @@ warnings.filterwarnings('ignore')
 
 # Agregar ruta
 sys.path.append(str(Path(__file__).parent.parent))
-from config.extractor_config import ExtractorConfig
-from core.prediction_pipeline import PredictionPipeline
+from ..config.extractor_config import ExtractorConfig
+from ..core.prediction_pipeline import PredictionPipeline
 
 
 class PredictionGUI:

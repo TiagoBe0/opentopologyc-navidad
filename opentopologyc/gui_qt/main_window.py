@@ -12,10 +12,10 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt
 
-from gui_qt.base_window import BaseWindow
-from gui_qt.extractor_gui_qt import ExtractorGUIQt
-from gui_qt.train_gui_qt import TrainingGUIQt
-from gui_qt.prediction_gui_qt import PredictionGUIQt
+from .base_window import BaseWindow
+from .extractor_gui_qt import ExtractorGUIQt
+from .train_gui_qt import TrainingGUIQt
+from .prediction_gui_qt import PredictionGUIQt
 
 
 class MainWindow(BaseWindow):

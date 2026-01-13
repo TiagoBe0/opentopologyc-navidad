@@ -10,8 +10,8 @@ from PySide6.QtWidgets import (
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QPixmap
 
-from gui_qt.base_window import BaseWindow
-from core.training_pipeline import TrainingPipeline
+from .base_window import BaseWindow
+from ..core.training_pipeline import TrainingPipeline
 
 
 # ======================================================
