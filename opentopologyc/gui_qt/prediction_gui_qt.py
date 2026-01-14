@@ -16,7 +16,8 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QFileDialog, QMessageBox, QGroupBox,
     QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox,
-    QProgressDialog, QTableWidget, QTableWidgetItem, QHeaderView
+    QProgressDialog, QTableWidget, QTableWidgetItem, QHeaderView,
+    QScrollArea
 )
 from PySide6.QtCore import Qt, QThread, Signal
 
@@ -144,8 +145,17 @@ class PredictionGUIQt(BaseWindow):
         central = QWidget()
         root = QHBoxLayout(central)
 
-        # ---------- PANEL IZQUIERDO: CONTROLES ----------
-        controls = QVBoxLayout()
+        # ---------- PANEL IZQUIERDO: CONTROLES CON SCROLL ----------
+        # Crear scroll area para los controles
+        scroll_area = QScrollArea()
+        scroll_area.setWidgetResizable(True)
+        scroll_area.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
+        scroll_area.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll_area.setMinimumWidth(400)  # Ancho mínimo para los controles
+
+        # Widget contenedor para los controles
+        controls_widget = QWidget()
+        controls = QVBoxLayout(controls_widget)
         controls.setAlignment(Qt.AlignTop)
 
         # === SECCIÓN 1: ARCHIVOS ===
@@ -326,7 +336,8 @@ class PredictionGUIQt(BaseWindow):
         self.table_clusters.setColumnCount(5)
         self.table_clusters.setHorizontalHeaderLabels(["Cluster", "Átomos", "Predicción", "Modelo", "Acción"])
         self.table_clusters.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
-        self.table_clusters.setMaximumHeight(200)
+        self.table_clusters.setMinimumHeight(150)
+        self.table_clusters.setMaximumHeight(300)  # Aumentado para mejor visibilidad
         self.table_clusters.setSelectionBehavior(QTableWidget.SelectRows)
         step4_layout.addWidget(self.table_clusters)
 
@@ -351,7 +362,11 @@ class PredictionGUIQt(BaseWindow):
 
         controls.addStretch()
 
-        root.addLayout(controls, 1)
+        # Asignar el widget de controles al scroll area
+        scroll_area.setWidget(controls_widget)
+
+        # Agregar scroll area al layout raíz (panel izquierdo)
+        root.addWidget(scroll_area, 1)
 
         # ---------- PANEL DERECHO: VISUALIZADOR ----------
         from .visualizer_3d_qt import AtomVisualizer3DQt
