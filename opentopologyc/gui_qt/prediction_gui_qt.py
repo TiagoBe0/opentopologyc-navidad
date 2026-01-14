@@ -16,7 +16,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QPushButton,
     QLabel, QFileDialog, QMessageBox, QGroupBox,
     QSpinBox, QDoubleSpinBox, QCheckBox, QComboBox,
-    QProgressDialog
+    QProgressDialog, QTableWidget, QTableWidgetItem, QHeaderView
 )
 from PySide6.QtCore import Qt, QThread, Signal
 
@@ -124,6 +124,12 @@ class PredictionGUIQt(BaseWindow):
         self.filtered_dump_data = None
         self.clustering_labels = None
         self.clustering_info = None
+
+        # Estado de predicción por clusters
+        self.cluster_predictions = []  # Lista de {cluster_id, n_atoms, prediction, model_name, features}
+        self.current_prediction_positions = None
+        self.current_prediction_source = ""
+        self.current_config = None  # ExtractorConfig usado en la predicción
 
         # Workers
         self.alpha_worker = None
@@ -303,6 +309,45 @@ class PredictionGUIQt(BaseWindow):
 
         step3_box.setLayout(step3_layout)
         controls.addWidget(step3_box)
+
+        # === SECCIÓN 5: PASO 4 - AJUSTE FINO (OPCIONAL) ===
+        self.step4_box = QGroupBox("⚙️ PASO 4: Ajuste Fino por Cluster (Opcional)")
+        step4_layout = QVBoxLayout()
+
+        step4_layout.addWidget(QLabel("Predicción Total Actual:"))
+        self.lbl_total_prediction = QLabel("-- vacancias")
+        self.lbl_total_prediction.setStyleSheet("font-size: 14px; font-weight: bold; color: #2196F3;")
+        step4_layout.addWidget(self.lbl_total_prediction)
+
+        step4_layout.addWidget(QLabel("\nPrediciones por Cluster:"))
+
+        # Tabla de clusters
+        self.table_clusters = QTableWidget()
+        self.table_clusters.setColumnCount(5)
+        self.table_clusters.setHorizontalHeaderLabels(["Cluster", "Átomos", "Predicción", "Modelo", "Acción"])
+        self.table_clusters.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self.table_clusters.setMaximumHeight(200)
+        self.table_clusters.setSelectionBehavior(QTableWidget.SelectRows)
+        step4_layout.addWidget(self.table_clusters)
+
+        # Selector de modelo alternativo
+        step4_layout.addWidget(QLabel("\nModelo alternativo para re-predicción:"))
+        self.combo_alt_model = QComboBox()
+        step4_layout.addWidget(self.combo_alt_model)
+
+        # Botón para re-predecir
+        self.btn_repredict = QPushButton("🔄 Re-predecir Cluster Seleccionado")
+        self.btn_repredict.setStyleSheet("background-color: #9C27B0; color: white;")
+        self.btn_repredict.clicked.connect(self.repredict_selected_cluster)
+        step4_layout.addWidget(self.btn_repredict)
+
+        self.lbl_repredict_status = QLabel("")
+        self.lbl_repredict_status.setStyleSheet("font-size: 10px;")
+        step4_layout.addWidget(self.lbl_repredict_status)
+
+        self.step4_box.setLayout(step4_layout)
+        self.step4_box.setVisible(False)  # Oculto inicialmente
+        controls.addWidget(self.step4_box)
 
         controls.addStretch()
 
@@ -727,6 +772,9 @@ class PredictionGUIQt(BaseWindow):
 
         self.lbl_step3_result.setText(f"✓ Predicción: {prediction:.2f} vacancias (Error: {error:.2f})")
 
+        # Ocultar paso 4 (no aplica sin clustering)
+        self.step4_box.setVisible(False)
+
         QMessageBox.information(self, "Predicción Completada", msg)
 
     def _predict_with_clusters(self, model, config):
@@ -792,7 +840,10 @@ class PredictionGUIQt(BaseWindow):
                 cluster_predictions.append({
                     'cluster_id': cluster_id,
                     'n_atoms': n_atoms_cluster,
-                    'prediction': cluster_pred
+                    'prediction': cluster_pred,
+                    'model_name': Path(self.model_path).name,
+                    'features': features.copy(),
+                    'positions': cluster_positions.copy()
                 })
             except Exception as e:
                 print(f"⚠️ Error al predecir cluster {cluster_id}: {str(e)}")
@@ -825,7 +876,16 @@ class PredictionGUIQt(BaseWindow):
 
         self.lbl_step3_result.setText(f"✓ {len(clusters_to_process)} clusters: {total_prediction:.2f} vacancias (Error: {error:.2f})")
 
+        # Guardar estado para ajuste fino
+        self.cluster_predictions = cluster_predictions
+        self.current_config = config
+
+        # Mostrar mensaje
         QMessageBox.information(self, "Predicción por Clusters", msg)
+
+        # Activar y poblar paso 4 (ajuste fino)
+        if len(cluster_predictions) > 0:
+            self._populate_fine_tuning_ui()
 
     # ======================================================
     # VISUALIZACIÓN DE CLUSTERS INDIVIDUALES
@@ -858,3 +918,122 @@ class PredictionGUIQt(BaseWindow):
 
         n_clusters = self.clustering_info['n_clusters']
         self.lbl_step2_result.setText(f"✓ Visualizando todos los clusters ({n_clusters} clusters)")
+
+    # ======================================================
+    # AJUSTE FINO POR CLUSTER
+    # ======================================================
+    def _populate_fine_tuning_ui(self):
+        """Pobla la tabla y controles del paso 4 (ajuste fino)"""
+        # Mostrar sección
+        self.step4_box.setVisible(True)
+
+        # Actualizar lista de modelos disponibles
+        self.refresh_model_list()  # Esto ya actualiza combo_models
+        
+        # Copiar modelos al combo alternativo
+        self.combo_alt_model.clear()
+        for i in range(self.combo_models.count()):
+            model_name = self.combo_models.itemText(i)
+            model_path = self.combo_models.itemData(i)
+            self.combo_alt_model.addItem(model_name, userData=model_path)
+
+        # Llenar tabla
+        self.table_clusters.setRowCount(len(self.cluster_predictions))
+        
+        for row, cp in enumerate(self.cluster_predictions):
+            # Cluster ID
+            self.table_clusters.setItem(row, 0, QTableWidgetItem(str(cp['cluster_id'])))
+            
+            # N átomos
+            self.table_clusters.setItem(row, 1, QTableWidgetItem(str(cp['n_atoms'])))
+            
+            # Predicción
+            pred_item = QTableWidgetItem(f"{cp['prediction']:.2f}")
+            self.table_clusters.setItem(row, 2, pred_item)
+            
+            # Modelo usado
+            self.table_clusters.setItem(row, 3, QTableWidgetItem(cp['model_name']))
+            
+            # Botón de acción (solo indicador visual)
+            action_item = QTableWidgetItem("🔄")
+            self.table_clusters.setItem(row, 4, action_item)
+
+        # Actualizar total
+        self._update_total_prediction()
+
+    def _update_total_prediction(self):
+        """Recalcula y actualiza el total de vacancias predichas"""
+        if not self.cluster_predictions:
+            return
+        
+        total = sum(cp['prediction'] for cp in self.cluster_predictions)
+        self.lbl_total_prediction.setText(f"{total:.2f} vacancias")
+        
+        # También actualizar el label del paso 3
+        self.lbl_step3_result.setText(
+            f"✓ {len(self.cluster_predictions)} clusters: {total:.2f} vacancias (ajustado)"
+        )
+
+    def repredict_selected_cluster(self):
+        """Re-predice el cluster seleccionado con el modelo alternativo"""
+        # Verificar que hay un cluster seleccionado
+        selected_rows = self.table_clusters.selectedItems()
+        if not selected_rows:
+            QMessageBox.warning(self, "Error", "Seleccione un cluster de la tabla")
+            return
+        
+        row = self.table_clusters.currentRow()
+        if row < 0 or row >= len(self.cluster_predictions):
+            QMessageBox.warning(self, "Error", "Cluster no válido")
+            return
+        
+        # Obtener modelo alternativo
+        alt_model_path = self.combo_alt_model.currentData()
+        if not alt_model_path or alt_model_path == "(No hay modelos disponibles)":
+            QMessageBox.warning(self, "Error", "Seleccione un modelo alternativo")
+            return
+        
+        try:
+            # Cargar modelo alternativo
+            alt_model = joblib.load(alt_model_path)
+            alt_model_name = Path(alt_model_path).name
+            
+            # Obtener cluster data
+            cluster_data = self.cluster_predictions[row]
+            features = cluster_data['features']
+            
+            # Re-predecir
+            import pandas as pd
+            df = pd.DataFrame([features])
+            forbidden = [
+                "n_vacancies", "n_atoms_surface",
+                "vacancies", "file", "num_atoms_real", "num_points"
+            ]
+            X = df.drop(columns=[c for c in forbidden if c in df.columns], errors="ignore")
+            
+            new_prediction = alt_model.predict(X)[0]
+            
+            # Actualizar datos
+            old_prediction = cluster_data['prediction']
+            cluster_data['prediction'] = new_prediction
+            cluster_data['model_name'] = alt_model_name
+            
+            # Actualizar tabla
+            self.table_clusters.item(row, 2).setText(f"{new_prediction:.2f}")
+            self.table_clusters.item(row, 3).setText(alt_model_name)
+            
+            # Actualizar total
+            self._update_total_prediction()
+            
+            # Mensaje de éxito
+            diff = new_prediction - old_prediction
+            sign = "+" if diff > 0 else ""
+            self.lbl_repredict_status.setText(
+                f"✓ Cluster {cluster_data['cluster_id']}: {old_prediction:.2f} → {new_prediction:.2f} ({sign}{diff:.2f})"
+            )
+            self.lbl_repredict_status.setStyleSheet("color: green; font-size: 10px;")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Error al re-predecir:\n{str(e)}")
+            self.lbl_repredict_status.setText(f"✗ Error: {str(e)}")
+            self.lbl_repredict_status.setStyleSheet("color: red; font-size: 10px;")
