@@ -816,8 +816,8 @@ class PredictionGUIQt(BaseWindow):
             cluster_positions = self.current_prediction_positions[mask]
             n_atoms_cluster = len(cluster_positions)
 
-            # Saltar clusters muy pequeños (menos de 10 átomos)
-            if n_atoms_cluster < 10:
+            # Saltar clusters muy pequeños (menos de 3 átomos)
+            if n_atoms_cluster < 3:
                 print(f"⚠️ Cluster {cluster_id} tiene solo {n_atoms_cluster} átomos, se omite.")
                 continue
 
@@ -861,8 +861,13 @@ class PredictionGUIQt(BaseWindow):
                     'positions': cluster_positions.copy()
                 })
             except Exception as e:
-                print(f"⚠️ Error al predecir cluster {cluster_id}: {str(e)}")
-                continue
+                import traceback
+                error_details = traceback.format_exc()
+                error_msg = f"Error al predecir cluster {cluster_id} ({n_atoms_cluster} átomos):\n{str(e)}\n\nDetalles:\n{error_details}"
+                QMessageBox.critical(self, "Error en Predicción de Cluster", error_msg)
+                print(f"⚠️ {error_msg}")
+                # No continuar, lanzar el error para que el usuario lo vea
+                raise
 
         # Calcular vacancias reales
         n_atoms_real = len(self.original_dump_data['positions'])
