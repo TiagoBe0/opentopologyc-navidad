@@ -72,14 +72,21 @@ class AtomVisualizer3DQt(QWidget):
     # ======================================================
     def _build_ui(self):
         layout = QVBoxLayout(self)
+        layout.setContentsMargins(0, 0, 0, 0)  # Sin márgenes externos
+        layout.setSpacing(2)  # Espacio mínimo entre widgets
 
-        # ---------- CONTROLES ----------
+        # ---------- CONTROLES COMPACTOS ----------
         controls = QGroupBox("Visualización")
+        controls.setMaximumHeight(80)  # Altura máxima reducida
         cl = QVBoxLayout()
+        cl.setContentsMargins(5, 5, 5, 5)  # Padding reducido
+        cl.setSpacing(3)  # Espacio mínimo
 
-        # Primera fila: Cargar dump y checkboxes
+        # Primera fila: Cargar dump, checkboxes y zoom
         first_row = QHBoxLayout()
-        btn_load = QPushButton("📂 Cargar dump")
+        btn_load = QPushButton("📂")
+        btn_load.setMaximumWidth(40)
+        btn_load.setToolTip("Cargar dump")
         btn_load.clicked.connect(self.load_dump_dialog)
         first_row.addWidget(btn_load)
 
@@ -95,21 +102,39 @@ class AtomVisualizer3DQt(QWidget):
 
         # Botones de zoom
         btn_zoom_in = QPushButton("🔍+")
-        btn_zoom_in.setMaximumWidth(50)
+        btn_zoom_in.setMaximumWidth(40)
         btn_zoom_in.clicked.connect(self.zoom_in)
         first_row.addWidget(btn_zoom_in)
 
         btn_zoom_out = QPushButton("🔍-")
-        btn_zoom_out.setMaximumWidth(50)
+        btn_zoom_out.setMaximumWidth(40)
         btn_zoom_out.clicked.connect(self.zoom_out)
         first_row.addWidget(btn_zoom_out)
 
         btn_reset_view = QPushButton("🔄")
-        btn_reset_view.setMaximumWidth(50)
+        btn_reset_view.setMaximumWidth(40)
         btn_reset_view.setToolTip("Resetear vista")
         btn_reset_view.clicked.connect(self.reset_view)
         first_row.addWidget(btn_reset_view)
 
+        # Sliders en la misma fila
+        first_row.addWidget(QLabel("Tam"))
+        size_slider = QSlider(Qt.Horizontal)
+        size_slider.setRange(5, 60)
+        size_slider.setValue(self.atom_size)
+        size_slider.setMaximumWidth(80)
+        size_slider.valueChanged.connect(self.set_atom_size)
+        first_row.addWidget(size_slider)
+
+        first_row.addWidget(QLabel("α"))
+        alpha_slider = QSlider(Qt.Horizontal)
+        alpha_slider.setRange(10, 100)
+        alpha_slider.setValue(int(self.alpha * 100))
+        alpha_slider.setMaximumWidth(80)
+        alpha_slider.valueChanged.connect(self.set_alpha)
+        first_row.addWidget(alpha_slider)
+
+        first_row.addStretch()
         cl.addLayout(first_row)
 
         # Segunda fila: Selector de etapas (inicialmente oculto)
@@ -126,27 +151,8 @@ class AtomVisualizer3DQt(QWidget):
         controls.setLayout(cl)
         layout.addWidget(controls)
 
-        # ---------- SLIDERS ----------
-        sliders = QHBoxLayout()
-
-        sliders.addWidget(QLabel("Tamaño"))
-        size_slider = QSlider(Qt.Horizontal)
-        size_slider.setRange(5, 60)
-        size_slider.setValue(self.atom_size)
-        size_slider.valueChanged.connect(self.set_atom_size)
-        sliders.addWidget(size_slider)
-
-        sliders.addWidget(QLabel("Alpha"))
-        alpha_slider = QSlider(Qt.Horizontal)
-        alpha_slider.setRange(10, 100)
-        alpha_slider.setValue(int(self.alpha * 100))
-        alpha_slider.valueChanged.connect(self.set_alpha)
-        sliders.addWidget(alpha_slider)
-
-        layout.addLayout(sliders)
-
-        # ---------- FIGURA ----------
-        self.fig = Figure(figsize=(7, 6))
+        # ---------- FIGURA (MÁS ESPACIO) ----------
+        self.fig = Figure(figsize=(8, 7))
         self.canvas = FigureCanvas(self.fig)
         self.ax = self.fig.add_subplot(111, projection="3d")
 
