@@ -106,10 +106,25 @@ class PredictionGUI:
 
         # Modelo entrenado
         ttk.Label(section1, text="Modelo entrenado:", font=("Arial", 10, "bold")).pack(anchor="w", pady=(0, 5))
+
+        # Combobox para modelos disponibles
+        ttk.Label(section1, text="Modelos disponibles en carpeta models/:", font=("Arial", 9)).pack(anchor="w", pady=(0, 2))
+        models_combo_frame = ttk.Frame(section1)
+        models_combo_frame.pack(fill="x", pady=(0, 5))
+        self.models_combo = ttk.Combobox(models_combo_frame, state="readonly", width=57)
+        self.models_combo.pack(side="left", fill="x", expand=True, padx=(0, 5))
+        self.models_combo.bind("<<ComboboxSelected>>", self.on_model_selected_combo)
+        ttk.Button(models_combo_frame, text="🔄", command=self.refresh_models_list, width=3).pack(side="right")
+
+        # Entry manual
+        ttk.Label(section1, text="O seleccione manualmente:", font=("Arial", 9)).pack(anchor="w", pady=(5, 2))
         model_frame = ttk.Frame(section1)
         model_frame.pack(fill="x", pady=(0, 5))
         ttk.Entry(model_frame, textvariable=self.var_model_file, width=60).pack(side="left", fill="x", expand=True, padx=(0, 5))
         ttk.Button(model_frame, text="Buscar", command=self.select_model_file, width=10).pack(side="right")
+
+        # Cargar lista inicial
+        self.refresh_models_list()
 
         # SECCIÓN 2: PARÁMETROS ALPHA SHAPE
         section2 = ttk.LabelFrame(content_frame, text="Parámetros Alpha Shape", padding=10)
@@ -442,6 +457,47 @@ class PredictionGUI:
         if model_file:
             self.var_model_file.set(model_file)
             self.log_result(f"Modelo seleccionado: {Path(model_file).name}", "INFO")
+
+    def refresh_models_list(self):
+        """Actualiza la lista de modelos disponibles en models/"""
+        from pathlib import Path
+
+        # Obtener carpeta models/
+        models_dir = Path(__file__).parent.parent.parent / "models"
+
+        if not models_dir.exists():
+            models_dir.mkdir(exist_ok=True)
+            self.models_combo["values"] = ["(No hay modelos disponibles)"]
+            return
+
+        # Buscar archivos .joblib y .pkl
+        model_files = list(models_dir.glob("*.joblib")) + list(models_dir.glob("*.pkl"))
+
+        if not model_files:
+            self.models_combo["values"] = ["(No hay modelos disponibles)"]
+        else:
+            # Ordenar por fecha de modificación (más reciente primero)
+            model_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+
+            # Guardar paths completos para recuperar después
+            self.model_paths = {f.name: str(f) for f in model_files}
+
+            # Mostrar solo nombres en el combo
+            self.models_combo["values"] = [f.name for f in model_files]
+
+            # Seleccionar el primero por defecto
+            if model_files:
+                self.models_combo.current(0)
+                self.var_model_file.set(str(model_files[0]))
+
+    def on_model_selected_combo(self, event=None):
+        """Cuando se selecciona un modelo del combobox"""
+        selected = self.models_combo.get()
+        if selected and selected != "(No hay modelos disponibles)":
+            if hasattr(self, 'model_paths') and selected in self.model_paths:
+                model_path = self.model_paths[selected]
+                self.var_model_file.set(model_path)
+                self.log_result(f"Modelo seleccionado: {selected}", "INFO")
 
     def log_result(self, message, level="INFO"):
         """Agrega mensaje al área de resultados"""

@@ -154,8 +154,20 @@ class PredictionGUIQt(BaseWindow):
         self.lbl_dump.setStyleSheet("color: gray; font-size: 10px;")
         files_layout.addWidget(self.lbl_dump)
 
-        btn_model = QPushButton("Cargar Modelo (.joblib/.pkl)")
-        btn_model.clicked.connect(self.load_model)
+        # Selector de modelos disponibles
+        files_layout.addWidget(QLabel("Modelos disponibles:"))
+        self.combo_models = QComboBox()
+        self.combo_models.currentIndexChanged.connect(self.on_model_selected)
+        files_layout.addWidget(self.combo_models)
+
+        # Botón para refrescar lista de modelos
+        btn_refresh = QPushButton("🔄 Actualizar lista")
+        btn_refresh.clicked.connect(self.refresh_model_list)
+        files_layout.addWidget(btn_refresh)
+
+        # Botón para cargar modelo manualmente
+        btn_model = QPushButton("Cargar Modelo Manual (.joblib/.pkl)")
+        btn_model.clicked.connect(self.load_model_manual)
         files_layout.addWidget(btn_model)
 
         self.lbl_model = QLabel("No cargado")
@@ -164,6 +176,9 @@ class PredictionGUIQt(BaseWindow):
 
         files_box.setLayout(files_layout)
         controls.addWidget(files_box)
+
+        # Cargar lista inicial de modelos
+        self.refresh_model_list()
 
         # === SECCIÓN 2: PASO 1 - ALPHA SHAPE ===
         step1_box = QGroupBox("🔵 PASO 1: Alpha Shape")
@@ -338,7 +353,43 @@ class PredictionGUIQt(BaseWindow):
             self.btn_view_cluster.setEnabled(False)
             self.btn_view_all.setEnabled(False)
 
-    def load_model(self):
+    def refresh_model_list(self):
+        """Actualiza el combo box con los modelos disponibles en models/"""
+        self.combo_models.clear()
+
+        # Obtener carpeta models/
+        models_dir = Path(__file__).parent.parent.parent / "models"
+
+        if not models_dir.exists():
+            models_dir.mkdir(exist_ok=True)
+            self.combo_models.addItem("(No hay modelos disponibles)")
+            return
+
+        # Buscar archivos .joblib y .pkl
+        model_files = list(models_dir.glob("*.joblib")) + list(models_dir.glob("*.pkl"))
+
+        if not model_files:
+            self.combo_models.addItem("(No hay modelos disponibles)")
+        else:
+            # Ordenar por fecha de modificación (más reciente primero)
+            model_files.sort(key=lambda x: x.stat().st_mtime, reverse=True)
+
+            for model_file in model_files:
+                self.combo_models.addItem(model_file.name, userData=str(model_file))
+
+    def on_model_selected(self, index):
+        """Cuando se selecciona un modelo del dropdown"""
+        if index < 0:
+            return
+
+        model_path = self.combo_models.itemData(index)
+        if model_path and model_path != "(No hay modelos disponibles)":
+            self.model_path = model_path
+            self.lbl_model.setText(f"✓ {Path(model_path).name}")
+            self.lbl_model.setStyleSheet("color: green; font-size: 10px;")
+
+    def load_model_manual(self):
+        """Carga un modelo manualmente desde cualquier ubicación"""
         path, _ = QFileDialog.getOpenFileName(
             self, "Seleccionar modelo", "", "Model (*.joblib *.pkl)"
         )

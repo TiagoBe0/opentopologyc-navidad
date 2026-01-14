@@ -9,6 +9,8 @@ from PySide6.QtWidgets import (
 )
 from PySide6.QtCore import Qt, QThread, Signal
 from PySide6.QtGui import QPixmap
+from pathlib import Path
+from datetime import datetime
 
 from .base_window import BaseWindow
 from ..core.training_pipeline import TrainingPipeline
@@ -162,8 +164,17 @@ class TrainingGUIQt(BaseWindow):
             self.lbl_csv.setText(path)
 
     def select_model(self):
+        # Crear carpeta models/ si no existe
+        models_dir = Path(__file__).parent.parent.parent / "models"
+        models_dir.mkdir(exist_ok=True)
+
+        # Generar nombre por defecto con timestamp
+        timestamp = datetime.now().strftime("%Y%m%d_%H%M%S")
+        default_name = f"vacancy_model_{timestamp}.joblib"
+        default_path = str(models_dir / default_name)
+
         path, _ = QFileDialog.getSaveFileName(
-            self, "Guardar modelo", "", "Model (*.joblib *.pkl)"
+            self, "Guardar modelo", default_path, "Model (*.joblib *.pkl)"
         )
         if path:
             self.model_path = path

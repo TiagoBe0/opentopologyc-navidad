@@ -34,7 +34,7 @@ class TrainingGUI:
         
         # Variables GUI
         self.var_input_csv = tk.StringVar()
-        self.var_output_dir = tk.StringVar(value="modelos_entrenados")
+        self.var_output_dir = tk.StringVar(value="models")
         self.var_test_size = tk.DoubleVar(value=0.2)
         self.var_random_state = tk.IntVar(value=42)
         self.var_top_features = tk.IntVar(value=20)
