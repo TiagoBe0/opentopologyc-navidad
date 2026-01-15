@@ -52,18 +52,27 @@ class FeatureExtractor:
         return normalized, box_size
 
     # ----------------------------------------------------
-    # GRID FEATURES COMPLETAS (20 features total)
+    # GRID FEATURES COMPLETAS (29 features total)
     # ----------------------------------------------------
     def grid_features(self, positions, box_size):
         """
-        Calcula TODAS las features del grid 3D (20 features en total)
+        Calcula TODAS las features del grid 3D (29 features en total)
         
         Args:
             positions: array (N, 3) de coordenadas NORMALIZADAS
             box_size: tamaño de la caja para el grid
             
         Returns:
-            dict con todas las 20 features
+            dict con todas las 29 features:
+            - 2 occupancy básicas
+            - 3 media por eje
+            - 4 gradientes
+            - 1 superficie
+            - 1 entropía
+            - 3 centro de masa
+            - 3 skewness
+            - 3 momentos de inercia (grid)
+            - 9 extras en otros métodos
         """
         N, M, L = self.grid_size
         grid = np.zeros((N, M, L), dtype=np.int8)
@@ -115,25 +124,57 @@ class FeatureExtractor:
         else:
             features["grid_entropy"] = 0.0
 
-        # ========== 6. MOMENTOS DE INERCIA DEL GRID (3 features) ==========
+        # ========== 6. CENTRO DE MASA DEL GRID (3 features) ==========
+        if occ > 0:
+            coords = np.argwhere(grid == 1)
+            com = coords.mean(axis=0)
+            features['grid_com_x'] = float(com[0])
+            features['grid_com_y'] = float(com[1])
+            features['grid_com_z'] = float(com[2])
+        else:
+            features['grid_com_x'] = 0.0
+            features['grid_com_y'] = 0.0
+            features['grid_com_z'] = 0.0
+
+        # ========== 7. SKEWNESS DEL GRID (3 features) ==========
+        if occ > 0:
+            try:
+                from scipy.stats import skew
+                proj_x = grid.sum(axis=(1, 2))
+                proj_y = grid.sum(axis=(0, 2))
+                proj_z = grid.sum(axis=(0, 1))
+
+                features['grid_skewness_x'] = float(skew(proj_x)) if len(proj_x) > 2 else 0.0
+                features['grid_skewness_y'] = float(skew(proj_y)) if len(proj_y) > 2 else 0.0
+                features['grid_skewness_z'] = float(skew(proj_z)) if len(proj_z) > 2 else 0.0
+            except Exception as e:
+                features['grid_skewness_x'] = 0.0
+                features['grid_skewness_y'] = 0.0
+                features['grid_skewness_z'] = 0.0
+        else:
+            features['grid_skewness_x'] = 0.0
+            features['grid_skewness_y'] = 0.0
+            features['grid_skewness_z'] = 0.0
+
+        # ========== 8. MOMENTOS DE INERCIA DEL GRID (3 features) ==========
         if occ > 0:
             try:
                 coords = np.argwhere(grid == 1)
                 centered_grid = coords - coords.mean(axis=0)
-                
+
                 Ixx = np.sum(centered_grid[:, 1]**2 + centered_grid[:, 2]**2)
                 Iyy = np.sum(centered_grid[:, 0]**2 + centered_grid[:, 2]**2)
                 Izz = np.sum(centered_grid[:, 0]**2 + centered_grid[:, 1]**2)
                 Ixy = -np.sum(centered_grid[:, 0] * centered_grid[:, 1])
                 Ixz = -np.sum(centered_grid[:, 0] * centered_grid[:, 2])
                 Iyz = -np.sum(centered_grid[:, 1] * centered_grid[:, 2])
-                
+
                 I_tensor = np.array([
                     [Ixx, Ixy, Ixz],
                     [Ixy, Iyy, Iyz],
                     [Ixz, Iyz, Izz]
                 ])
-                
+
                 eigenvalues = np.sort(np.linalg.eigvalsh(I_tensor))[::-1]
                 features['grid_moi_1'] = float(eigenvalues[0])
                 features['grid_moi_2'] = float(eigenvalues[1])
@@ -141,7 +182,7 @@ class FeatureExtractor:
             except Exception as e:
                 features['grid_moi_1'] = 0.0
                 features['grid_moi_2'] = 0.0
-                features['grid_moi_3'] = float(eigenvalues[2])
+                features['grid_moi_3'] = 0.0
         else:
             features['grid_moi_1'] = 0.0
             features['grid_moi_2'] = 0.0
@@ -150,19 +191,23 @@ class FeatureExtractor:
         return features
 
     # ----------------------------------------------------
-    # INERCIA PRINCIPAL (1 feature)
+    # INERCIA PRINCIPAL (3 features)
     # ----------------------------------------------------
     def inertia_feature(self, positions):
         """
-        Calcula moi_principal_3
-        
-        Nota: Esto es DIFERENTE de grid_moi_3.
-        grid_moi_3 es de las celdas ocupadas del grid.
-        moi_principal_3 es de las posiciones atómicas reales.
+        Calcula moi_principal_1, moi_principal_2, moi_principal_3
+
+        Nota: Esto es DIFERENTE de grid_moi_*.
+        grid_moi_* son de las celdas ocupadas del grid.
+        moi_principal_* son de las posiciones atómicas reales.
         """
         if len(positions) < 3:
-            return {"moi_principal_3": np.nan}
-        
+            return {
+                "moi_principal_1": np.nan,
+                "moi_principal_2": np.nan,
+                "moi_principal_3": np.nan
+            }
+
         try:
             c = positions - positions.mean(axis=0)
 
@@ -182,9 +227,17 @@ class FeatureExtractor:
 
             eig = np.sort(np.linalg.eigvalsh(I))[::-1]
 
-            return {"moi_principal_3": float(eig[2])}
+            return {
+                "moi_principal_1": float(eig[0]),
+                "moi_principal_2": float(eig[1]),
+                "moi_principal_3": float(eig[2])
+            }
         except Exception as e:
-            return {"moi_principal_3": np.nan}
+            return {
+                "moi_principal_1": np.nan,
+                "moi_principal_2": np.nan,
+                "moi_principal_3": np.nan
+            }
 
     # ----------------------------------------------------
     # RADIAL FEATURES (2 features)
@@ -318,19 +371,25 @@ class FeatureExtractor:
             n_vacancies: número de vacancias (opcional)
 
         Returns:
-            dict con todas las features (19 base + 4 hull opcionales + n_vacancies si se proporciona)
+            dict con todas las features:
+            - 20 grid features (occupancy, gradients, entropy, COM, skewness, MOI)
+            - 3 MOI principales (de posiciones atómicas reales)
+            - 2 radial features (RDF)
+            - 1 entropy espacial
+            - 1 bandwidth
+            Total: 27 features base (+ 4 hull opcionales + n_vacancies si se proporciona)
         """
         # Normalizar posiciones
         normalized_pos, box_size = self.normalize_positions(positions)
         
         # Inicializar diccionario de features
         features = {}
-        
-        # 1. Grid features (15 features)
+
+        # 1. Grid features (20 features: occupancy, gradients, entropy, COM, skewness, MOI)
         grid_feats = self.grid_features(normalized_pos, box_size)
         features.update(grid_feats)
-        
-        # 2. MOI principal (1 feature)
+
+        # 2. MOI principales de posiciones atómicas (3 features)
         moi_feats = self.inertia_feature(positions)
         features.update(moi_feats)
         
@@ -368,9 +427,17 @@ class FeatureExtractor:
             'occupancy_gradient_total',
             'occupancy_surface',
             'grid_entropy',
+            'grid_com_x',
+            'grid_com_y',
+            'grid_com_z',
+            'grid_skewness_x',
+            'grid_skewness_y',
+            'grid_skewness_z',
             'grid_moi_1',
             'grid_moi_2',
             'grid_moi_3',
+            'moi_principal_1',
+            'moi_principal_2',
             'moi_principal_3',
             'rdf_mean',
             'rdf_kurtosis',
@@ -430,9 +497,17 @@ class FeatureExtractor:
             'occupancy_gradient_total',
             'occupancy_surface',
             'grid_entropy',
+            'grid_com_x',
+            'grid_com_y',
+            'grid_com_z',
+            'grid_skewness_x',
+            'grid_skewness_y',
+            'grid_skewness_z',
             'grid_moi_1',
             'grid_moi_2',
             'grid_moi_3',
+            'moi_principal_1',
+            'moi_principal_2',
             'moi_principal_3',
             'rdf_mean',
             'rdf_kurtosis',
@@ -478,11 +553,19 @@ class FeatureExtractor:
             ],
             'grid_analysis': [
                 'grid_entropy',
+                'grid_com_x',
+                'grid_com_y',
+                'grid_com_z',
+                'grid_skewness_x',
+                'grid_skewness_y',
+                'grid_skewness_z',
                 'grid_moi_1',
                 'grid_moi_2',
                 'grid_moi_3'
             ],
             'shape_analysis': [
+                'moi_principal_1',
+                'moi_principal_2',
                 'moi_principal_3'
             ],
             'radial_distribution': [

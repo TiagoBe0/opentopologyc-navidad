@@ -24,7 +24,7 @@ class ExtractorConfig:
     a0: float = 3.532
     lattice_type: str = "fcc"            # tipo de celda unidad (fcc, bcc, hcp, diamond, sc)
     compute_grid_features: bool = True
-    compute_hull_features: bool = True
+    compute_hull_features: bool = False   # DESACTIVADO: hull features no son compatibles con modelos legacy
     compute_inertia_features: bool = True
     compute_radial_features: bool = True
     compute_entropy_features: bool = True
