@@ -3,11 +3,19 @@
 # opentopologyc/main_qt.py
 
 """
-Punto de entrada principal para OpenTopologyC (versión Qt)
-Lanza la interfaz gráfica Qt que permite acceder a:
-- Extractor de Features
-- Entrenamiento de Modelos
-- Predicción de Vacancias con Visualizador 3D
+Punto de entrada principal para OpenTopologyC Kit-Tools
+========================================================
+
+Versión simplificada enfocada en predicción.
+
+Herramientas incluidas:
+- Alpha Shape filtering (filtrado de átomos superficiales)
+- Clustering (KMeans, MeanShift, HDBSCAN, Hierarchical)
+- Predicción de vacancias con modelos pre-entrenados
+- Visualizador 3D interactivo
+
+NOTA: Esta versión NO incluye entrenamiento ni extracción de features.
+      Los modelos ML deben ser entrenados previamente en otra herramienta.
 """
 
 # CRÍTICO: Configurar matplotlib ANTES DE CUALQUIER OTRO IMPORT
@@ -35,36 +43,37 @@ root_dir = Path(__file__).parent.parent  # Subir un nivel desde scripts/ a la ra
 sys.path.insert(0, str(root_dir))
 
 from PySide6.QtWidgets import QApplication
-from opentopologyc.gui_qt.main_window import MainWindow
+from opentopologyc.gui_qt.prediction_gui_qt import PredictionGUIQt
 from opentopologyc.core.logger import setup_logger, log_session_start, log_session_end
 
 
 def main():
-    """Inicia la aplicación OpenTopologyC Qt"""
+    """Inicia la aplicación OpenTopologyC Kit-Tools (Predicción)"""
     # Configurar logging
     logger = setup_logger(
-        name="opentopologyc",
-        log_file="opentopologyc.log",
+        name="opentopologyc_kittools",
+        log_file="opentopologyc_kittools.log",
         console=False  # No duplicar salida en consola
     )
 
-    log_session_start(logger, "GUI Qt")
-    logger.info("Iniciando aplicación OpenTopologyC Qt")
+    log_session_start(logger, "Kit-Tools (Predicción)")
+    logger.info("Iniciando OpenTopologyC Kit-Tools - Prediction Suite")
 
     try:
         app = QApplication(sys.argv)
 
         # Configurar estilo de aplicación
-        app.setApplicationName("OpenTopologyC")
+        app.setApplicationName("OpenTopologyC Kit-Tools")
         app.setOrganizationName("OpenTopologyC")
 
         logger.info("Aplicación Qt configurada")
 
-        # Crear y mostrar ventana principal
-        window = MainWindow()
+        # Crear y mostrar GUI de predicción directamente
+        window = PredictionGUIQt()
+        window.setWindowTitle("OpenTopologyC Kit-Tools - Predicción")
         window.show()
 
-        logger.info("Ventana principal mostrada")
+        logger.info("GUI de predicción mostrada")
 
         # Ejecutar aplicación
         exit_code = app.exec_()

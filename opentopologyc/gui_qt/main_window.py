@@ -1,3 +1,19 @@
+#!/usr/bin/env python3
+# -*- coding: utf-8 -*-
+
+"""
+OpenTopologyC Kit-Tools - Main Window
+======================================
+
+Aplicación simplificada que solo incluye herramientas de predicción:
+- Alpha Shape filtering
+- Clustering (KMeans, MeanShift, HDBSCAN, Hierarchical)
+- Predicción con modelos pre-entrenados
+
+Nota: Esta versión NO incluye entrenamiento ni extracción de features.
+Los modelos deben ser entrenados previamente.
+"""
+
 import sys
 from pathlib import Path
 
@@ -6,70 +22,21 @@ if __name__ == "__main__":
     root_dir = Path(__file__).parent.parent
     sys.path.insert(0, str(root_dir))
 
-from PySide6.QtWidgets import (
-    QApplication, QWidget, QVBoxLayout,
-    QPushButton, QLabel
-)
-from PySide6.QtCore import Qt
-
-from .base_window import BaseWindow
-from .extractor_gui_qt import ExtractorGUIQt
-from .train_gui_qt import TrainingGUIQt
+from PySide6.QtWidgets import QApplication
 from .prediction_gui_qt import PredictionGUIQt
 
 
-class MainWindow(BaseWindow):
-    def __init__(self):
-        super().__init__("OpenTopologyC - Suite Completa", (500, 500))
-        self._build_ui()
+def main():
+    """Launch the prediction-only GUI"""
+    app = QApplication(sys.argv)
 
-    def _build_ui(self):
-        central = QWidget()
-        layout = QVBoxLayout(central)
-        layout.setSpacing(20)
-        layout.setAlignment(Qt.AlignCenter)
+    # Launch prediction GUI directly
+    window = PredictionGUIQt()
+    window.setWindowTitle("OpenTopologyC Kit-Tools - Predicción")
+    window.show()
 
-        title = QLabel("OpenTopologyC")
-        title.setAlignment(Qt.AlignCenter)
-        title.setStyleSheet("font-size:26px; font-weight:bold;")
-
-        subtitle = QLabel("Suite de Análisis Topológico")
-        subtitle.setAlignment(Qt.AlignCenter)
-        subtitle.setStyleSheet("color:gray;")
-
-        layout.addWidget(title)
-        layout.addWidget(subtitle)
-
-        btn_extractor = QPushButton("🔬 Extractor de Features")
-        btn_extractor.clicked.connect(self.open_extractor)
-
-        btn_train = QPushButton("🤖 Entrenamiento")
-        btn_train.clicked.connect(self.open_train)
-
-        btn_predict = QPushButton("🎯 Predicción + Visualizador")
-        btn_predict.clicked.connect(self.open_prediction)
-
-        for b in (btn_extractor, btn_train, btn_predict):
-            b.setMinimumHeight(40)
-            layout.addWidget(b)
-
-        self.setCentralWidget(central)
-
-    def open_extractor(self):
-        self.child = ExtractorGUIQt()
-        self.child.show()
-
-    def open_train(self):
-        self.child = TrainingGUIQt()
-        self.child.show()
-
-    def open_prediction(self):
-        self.child = PredictionGUIQt()
-        self.child.show()
+    sys.exit(app.exec_())
 
 
 if __name__ == "__main__":
-    app = QApplication(sys.argv)
-    w = MainWindow()
-    w.show()
-    sys.exit(app.exec_())
+    main()
