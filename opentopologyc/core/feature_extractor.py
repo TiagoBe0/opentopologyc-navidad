@@ -260,18 +260,65 @@ class FeatureExtractor:
             return {"ms_bandwidth": np.nan}
 
     # ----------------------------------------------------
+    # CONVEX HULL FEATURES
+    # ----------------------------------------------------
+    def hull_features(self, positions):
+        """
+        Calcula características del convex hull (envoltura convexa)
+
+        Args:
+            positions: array (N, 3) de coordenadas
+
+        Returns:
+            dict con características del hull
+        """
+        from scipy.spatial import ConvexHull
+
+        if len(positions) < 4:
+            return {
+                "hull_volume": np.nan,
+                "hull_area": np.nan,
+                "hull_n_simplices": np.nan,
+                "hull_volume_area_ratio": np.nan
+            }
+
+        try:
+            hull = ConvexHull(positions)
+
+            volume = float(hull.volume)
+            area = float(hull.area)
+            n_simplices = float(len(hull.simplices))
+
+            # Relación volumen/área (indicador de compacidad)
+            vol_area_ratio = volume / area if area > 0 else 0.0
+
+            return {
+                "hull_volume": volume,
+                "hull_area": area,
+                "hull_n_simplices": n_simplices,
+                "hull_volume_area_ratio": vol_area_ratio
+            }
+        except Exception as e:
+            return {
+                "hull_volume": np.nan,
+                "hull_area": np.nan,
+                "hull_n_simplices": np.nan,
+                "hull_volume_area_ratio": np.nan
+            }
+
+    # ----------------------------------------------------
     # FEATURE EXTRACTION PIPELINE COMPLETO
     # ----------------------------------------------------
     def extract_all_features(self, positions, n_vacancies=None):
         """
-        Pipeline completo para extraer las 20 features
-        
+        Pipeline completo para extraer todas las features
+
         Args:
             positions: array (N, 3) de coordenadas atómicas
             n_vacancies: número de vacancias (opcional)
-            
+
         Returns:
-            dict con todas las 20 features más n_vacancies si se proporciona
+            dict con todas las features (19 base + 4 hull opcionales + n_vacancies si se proporciona)
         """
         # Normalizar posiciones
         normalized_pos, box_size = self.normalize_positions(positions)
@@ -298,12 +345,17 @@ class FeatureExtractor:
         # 5. Bandwidth (1 feature)
         bw_feats = self.bandwidth(positions)
         features.update(bw_feats)
-        
-        # 6. Vacancias (si se proporciona)
+
+        # 6. Hull features (4 features) - si está habilitado en config
+        if hasattr(self.cfg, 'compute_hull_features') and self.cfg.compute_hull_features:
+            hull_feats = self.hull_features(positions)
+            features.update(hull_feats)
+
+        # 7. Vacancias (si se proporciona)
         if n_vacancies is not None:
             features['n_vacancies'] = float(n_vacancies)
-        
-        # Lista final de todas las columnas esperadas
+
+        # Lista final de todas las columnas esperadas (base)
         final_features = [
             'occupancy_total',
             'occupancy_fraction',
@@ -325,6 +377,15 @@ class FeatureExtractor:
             'entropy_spatial',
             'ms_bandwidth'
         ]
+
+        # Agregar hull features si están habilitadas
+        if hasattr(self.cfg, 'compute_hull_features') and self.cfg.compute_hull_features:
+            final_features.extend([
+                'hull_volume',
+                'hull_area',
+                'hull_n_simplices',
+                'hull_volume_area_ratio'
+            ])
         
         # Asegurar que todas las features estén presentes
         for feat in final_features:
@@ -346,13 +407,14 @@ class FeatureExtractor:
     # ----------------------------------------------------
     # MÉTODOS DE CONVENIENCIA PARA ACCESO INDIVIDUAL
     # ----------------------------------------------------
-    def get_all_feature_names(self, include_vacancies=True):
+    def get_all_feature_names(self, include_vacancies=True, include_hull=None):
         """
         Devuelve la lista de todas las features extraídas
-        
+
         Args:
             include_vacancies: si incluir n_vacancies en la lista
-            
+            include_hull: si incluir hull features. Si es None, usa la config.
+
         Returns:
             list de nombres de features
         """
@@ -377,17 +439,29 @@ class FeatureExtractor:
             'entropy_spatial',
             'ms_bandwidth'
         ]
-        
+
+        # Agregar hull features si corresponde
+        if include_hull is None:
+            include_hull = hasattr(self.cfg, 'compute_hull_features') and self.cfg.compute_hull_features
+
+        if include_hull:
+            features.extend([
+                'hull_volume',
+                'hull_area',
+                'hull_n_simplices',
+                'hull_volume_area_ratio'
+            ])
+
         if include_vacancies:
             features.append('n_vacancies')
-            
+
         return features
     
     def get_feature_categories(self):
         """
         Devuelve las features agrupadas por categoría
         """
-        return {
+        categories = {
             'occupancy': [
                 'occupancy_total',
                 'occupancy_fraction',
@@ -423,3 +497,14 @@ class FeatureExtractor:
                 'n_vacancies'
             ]
         }
+
+        # Agregar hull features si están habilitadas
+        if hasattr(self.cfg, 'compute_hull_features') and self.cfg.compute_hull_features:
+            categories['hull_analysis'] = [
+                'hull_volume',
+                'hull_area',
+                'hull_n_simplices',
+                'hull_volume_area_ratio'
+            ]
+
+        return categories
