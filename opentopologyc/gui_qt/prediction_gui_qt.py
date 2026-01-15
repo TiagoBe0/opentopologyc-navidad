@@ -749,6 +749,8 @@ class PredictionGUIQt(BaseWindow):
         features = {}
         if config.compute_grid_features:
             features.update(extractor.grid_features(pos_norm, box_size))
+        if config.compute_hull_features:
+            features.update(extractor.hull_features(self.current_prediction_positions))
         if config.compute_inertia_features:
             features.update(extractor.inertia_feature(self.current_prediction_positions))
         if config.compute_radial_features:
@@ -829,6 +831,8 @@ class PredictionGUIQt(BaseWindow):
             features = {}
             if config.compute_grid_features:
                 features.update(extractor.grid_features(pos_norm, reference_box_size))
+            if config.compute_hull_features:
+                features.update(extractor.hull_features(cluster_positions))
             if config.compute_inertia_features:
                 features.update(extractor.inertia_feature(cluster_positions))
             if config.compute_radial_features:
@@ -863,11 +867,10 @@ class PredictionGUIQt(BaseWindow):
             except Exception as e:
                 import traceback
                 error_details = traceback.format_exc()
-                error_msg = f"Error al predecir cluster {cluster_id} ({n_atoms_cluster} átomos):\n{str(e)}\n\nDetalles:\n{error_details}"
-                QMessageBox.critical(self, "Error en Predicción de Cluster", error_msg)
-                print(f"⚠️ {error_msg}")
-                # No continuar, lanzar el error para que el usuario lo vea
-                raise
+                print(f"⚠️ Error al predecir cluster {cluster_id} ({n_atoms_cluster} átomos): {str(e)}")
+                print(error_details)
+                # Continuar con el siguiente cluster
+                continue
 
         # Calcular vacancias reales
         n_atoms_real = len(self.original_dump_data['positions'])
