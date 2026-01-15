@@ -50,6 +50,9 @@ class ExtractorPipeline:
             if self.cfg.compute_grid_features:
                 feats.update(self.features.grid_features(pos_norm, box_size))
 
+            if self.cfg.compute_hull_features:
+                feats.update(self.features.hull_features(pos))
+
             if self.cfg.compute_inertia_features:
                 feats.update(self.features.inertia_feature(pos))
 
