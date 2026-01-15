@@ -348,7 +348,7 @@ class AtomVisualizer3DQt(QWidget):
     # ZOOM
     # ======================================================
     def zoom_in(self):
-        """Acercar la vista (zoom in) en un 20%"""
+        """Acercar la vista (zoom in) en un 40%"""
         if self.positions is None or self.original_limits is None:
             return
 
@@ -362,10 +362,10 @@ class AtomVisualizer3DQt(QWidget):
         y_center = (ylim[0] + ylim[1]) / 2
         z_center = (zlim[0] + zlim[1]) / 2
 
-        # Reducir rangos en 20%
-        x_range = (xlim[1] - xlim[0]) * 0.8
-        y_range = (ylim[1] - ylim[0]) * 0.8
-        z_range = (zlim[1] - zlim[0]) * 0.8
+        # Reducir rangos en 40% (más agresivo que el 20% anterior)
+        x_range = (xlim[1] - xlim[0]) * 0.6
+        y_range = (ylim[1] - ylim[0]) * 0.6
+        z_range = (zlim[1] - zlim[0]) * 0.6
 
         # Aplicar nuevos límites
         self.ax.set_xlim(x_center - x_range/2, x_center + x_range/2)
@@ -381,7 +381,7 @@ class AtomVisualizer3DQt(QWidget):
         self.canvas.draw_idle()
 
     def zoom_out(self):
-        """Alejar la vista (zoom out) en un 20%"""
+        """Alejar la vista (zoom out) en un 40%"""
         if self.positions is None or self.original_limits is None:
             return
 
@@ -395,10 +395,10 @@ class AtomVisualizer3DQt(QWidget):
         y_center = (ylim[0] + ylim[1]) / 2
         z_center = (zlim[0] + zlim[1]) / 2
 
-        # Aumentar rangos en 20%
-        x_range = (xlim[1] - xlim[0]) * 1.2
-        y_range = (ylim[1] - ylim[0]) * 1.2
-        z_range = (zlim[1] - zlim[0]) * 1.2
+        # Aumentar rangos en 67% (inverso del 40% de zoom in)
+        x_range = (xlim[1] - xlim[0]) * 1.67
+        y_range = (ylim[1] - ylim[0]) * 1.67
+        z_range = (zlim[1] - zlim[0]) * 1.67
 
         # Aplicar nuevos límites
         self.ax.set_xlim(x_center - x_range/2, x_center + x_range/2)
