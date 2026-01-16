@@ -1,176 +1,274 @@
-# Cambios en el Sistema de Predicción
+# Corrección del Sistema de Predicción - Compatibilidad con Modelo Legacy
 
 ## Resumen
 
-Se modificó la etapa de predicción para garantizar compatibilidad total con modelos entrenados usando el extractor de features estándar (19 features base).
+Se corrigió el sistema de extracción de features para ser compatible con modelos legacy que requieren **27 features base** (no 19 como se pensaba inicialmente).
 
 ## Fecha
 2026-01-16
 
+## Problema Detectado
+
+El modelo de ML estaba entrenado con un conjunto de features diferente al que el código actual generaba, causando el error:
+
+```
+ValueError: The feature names should match those that were passed during fit.
+Feature names unseen at fit time:
+- hull_n_simplices
+- hull_volume_area_ratio
+Feature names seen at fit time, yet now missing:
+- grid_com_x
+- grid_com_y
+- grid_com_z
+- grid_skewness_x
+- moi_principal_1
+- ...
+```
+
+## Causa del Problema
+
+1. El modelo fue entrenado con **27 features** que incluían:
+   - Centro de masa del grid (grid_com_x/y/z)
+   - Skewness del grid (grid_skewness_x/y/z)
+   - **3 momentos principales de inercia** (moi_principal_1/2/3), no solo el tercero
+
+2. El código actual solo generaba **19 features** y agregaba hull_features no compatibles
+
 ## Archivos Modificados
 
-### 1. `opentopologyc/core/prediction_pipeline.py`
+### 1. `opentopologyc/core/feature_extractor.py`
 
-**Cambio Principal:**
-- Modificado el método `_extract_features()` para usar `extract_all_features()` del `FeatureExtractor`
-- Eliminada la extracción manual de features que podía causar inconsistencias
-- Removida la adición de `num_points` que no era parte del modelo entrenado
+**Cambios en `grid_features()`:**
 
-**Antes:**
+Se agregaron 6 nuevas features al método (de 14 a 20 features):
+
 ```python
-def _extract_features(self, dump_file):
-    raw = self.loader.load(dump_file)
-    pos = raw["positions"]
-    pos_norm, box_size, _ = self.normalizer.normalize(pos)
+# NUEVAS: Centro de masa del grid (3 features)
+if occ > 0:
+    coords = np.argwhere(grid == 1)
+    com = coords.mean(axis=0)
+    features['grid_com_x'] = float(com[0])
+    features['grid_com_y'] = float(com[1])
+    features['grid_com_z'] = float(com[2])
 
-    feats = {}
-    if self.config.compute_grid_features:
-        feats.update(self.features_extractor.grid_features(pos_norm, box_size))
-    if self.config.compute_inertia_features:
-        feats.update(self.features_extractor.inertia_feature(pos))
-    # ... más llamadas manuales
+# NUEVAS: Skewness del grid (3 features)
+if occ > 0:
+    from scipy.stats import skew
+    proj_x = grid.sum(axis=(1, 2))
+    proj_y = grid.sum(axis=(0, 2))
+    proj_z = grid.sum(axis=(0, 1))
 
-    feats["num_points"] = pos.shape[0]  # ❌ No compatible con modelo
-    return feats
+    features['grid_skewness_x'] = float(skew(proj_x))
+    features['grid_skewness_y'] = float(skew(proj_y))
+    features['grid_skewness_z'] = float(skew(proj_z))
 ```
 
-**Después:**
+**Cambios en `inertia_feature()`:**
+
+Se extendió para calcular los 3 momentos principales (de 1 a 3 features):
+
 ```python
-def _extract_features(self, dump_file):
-    """
-    Extrae features usando el pipeline completo de extract_all_features()
-    para garantizar compatibilidad con el modelo entrenado.
-    """
-    raw = self.loader.load(dump_file)
-    pos = raw["positions"]
+# ANTES: Solo retornaba moi_principal_3
+return {"moi_principal_3": float(eig[2])}
 
-    # Usar el pipeline completo de extract_all_features()
-    # Esto extrae las 19 features base en el orden correcto
-    feats = self.features_extractor.extract_all_features(
-        positions=pos,
-        n_vacancies=None  # No incluir target en predicción
-    )
-
-    return feats
+# AHORA: Retorna los 3 momentos principales
+return {
+    "moi_principal_1": float(eig[0]),
+    "moi_principal_2": float(eig[1]),
+    "moi_principal_3": float(eig[2])
+}
 ```
 
-## Beneficios de los Cambios
+**Cambios en `extract_all_features()`:**
 
-### ✅ Compatibilidad Garantizada
-- Las features se extraen en el **mismo orden** que durante el entrenamiento
-- Se usan los **mismos métodos** de cálculo
-- Se aplica la **misma normalización** (centrado + PCA con covariance_eigh)
+Se actualizó la lista de features finales para incluir las 27 features en el orden correcto:
 
-### ✅ Consistencia de Normalización
-- El `extract_all_features()` usa su propio método `normalize_positions()`
-- Centrado en el origen antes de PCA
-- PCA optimizado con `svd_solver='covariance_eigh'`
-- Box size con límite de 10.0
+```python
+final_features = [
+    # Occupancy básicas (2)
+    'occupancy_total',
+    'occupancy_fraction',
+    # Occupancy por eje (3)
+    'occupancy_x_mean',
+    'occupancy_y_mean',
+    'occupancy_z_mean',
+    # Gradientes (4)
+    'occupancy_gradient_x',
+    'occupancy_gradient_y',
+    'occupancy_gradient_z',
+    'occupancy_gradient_total',
+    # Superficie (1)
+    'occupancy_surface',
+    # Entropía del grid (1)
+    'grid_entropy',
+    # Centro de masa del grid (3) ← NUEVO
+    'grid_com_x',
+    'grid_com_y',
+    'grid_com_z',
+    # Skewness del grid (3) ← NUEVO
+    'grid_skewness_x',
+    'grid_skewness_y',
+    'grid_skewness_z',
+    # Momentos de inercia del grid (3)
+    'grid_moi_1',
+    'grid_moi_2',
+    'grid_moi_3',
+    # Momentos principales (3) ← AMPLIADO
+    'moi_principal_1',
+    'moi_principal_2',
+    'moi_principal_3',
+    # RDF (2)
+    'rdf_mean',
+    'rdf_kurtosis',
+    # Entropy espacial (1)
+    'entropy_spatial',
+    # Bandwidth (1)
+    'ms_bandwidth'
+]
+```
 
-### ✅ Sin Features Adicionales
-- Eliminado `num_points` que causaba incompatibilidad
-- No se agregan features no esperadas por el modelo
+**Cambios en `get_all_feature_names()` y `get_feature_categories()`:**
 
-### ✅ Mantenimiento Simplificado
-- Un solo punto de extracción de features (`extract_all_features()`)
-- Cambios futuros solo en `FeatureExtractor` se propagan automáticamente
-- Menos código duplicado
+Se actualizaron para reflejar las 27 features base.
 
-## Features Extraídas (19 en total)
+### 2. `test_feature_extraction.py`
 
-Las 19 features base que se extraen son:
+Se actualizó el script de verificación para validar las 27 features en lugar de 19.
 
-### Occupancy (5 features)
+### 3. `opentopologyc/core/prediction_pipeline.py`
+
+Ya estaba usando `extract_all_features()`, por lo que automáticamente usa las 27 features correctas.
+
+## Features Extraídas (27 en total)
+
+### Grid Features (20 features)
+
+**Occupancy Básicas (2):**
 1. `occupancy_total` - Total de celdas ocupadas en el grid
 2. `occupancy_fraction` - Fracción de celdas ocupadas
+
+**Occupancy por Eje (3):**
 3. `occupancy_x_mean` - Media de ocupación en eje X
 4. `occupancy_y_mean` - Media de ocupación en eje Y
 5. `occupancy_z_mean` - Media de ocupación en eje Z
 
-### Gradientes (5 features)
+**Gradientes (4):**
 6. `occupancy_gradient_x` - Gradiente en dirección X
 7. `occupancy_gradient_y` - Gradiente en dirección Y
 8. `occupancy_gradient_z` - Gradiente en dirección Z
 9. `occupancy_gradient_total` - Suma de gradientes
+
+**Superficie (1):**
 10. `occupancy_surface` - Superficie total (gradientes)
 
-### Grid Analysis (4 features)
+**Entropía del Grid (1):**
 11. `grid_entropy` - Entropía del grid 3D
-12. `grid_moi_1` - Primer momento de inercia del grid
-13. `grid_moi_2` - Segundo momento de inercia del grid
-14. `grid_moi_3` - Tercer momento de inercia del grid
 
-### Shape Analysis (1 feature)
-15. `moi_principal_3` - Tercer momento principal de inercia (posiciones atómicas)
+**Centro de Masa del Grid (3):** ✨ **NUEVO**
+12. `grid_com_x` - Centro de masa del grid en X
+13. `grid_com_y` - Centro de masa del grid en Y
+14. `grid_com_z` - Centro de masa del grid en Z
+
+**Skewness del Grid (3):** ✨ **NUEVO**
+15. `grid_skewness_x` - Asimetría de la distribución en X
+16. `grid_skewness_y` - Asimetría de la distribución en Y
+17. `grid_skewness_z` - Asimetría de la distribución en Z
+
+**Momentos de Inercia del Grid (3):**
+18. `grid_moi_1` - Primer momento de inercia del grid
+19. `grid_moi_2` - Segundo momento de inercia del grid
+20. `grid_moi_3` - Tercer momento de inercia del grid
+
+### Shape Analysis (3 features) - ✨ **AMPLIADO**
+
+21. `moi_principal_1` - Primer momento principal de inercia (posiciones atómicas)
+22. `moi_principal_2` - Segundo momento principal de inercia
+23. `moi_principal_3` - Tercer momento principal de inercia
 
 ### Radial Distribution (2 features)
-16. `rdf_mean` - Media de la distribución radial
-17. `rdf_kurtosis` - Curtosis de la distribución radial
+
+24. `rdf_mean` - Media de la distribución radial
+25. `rdf_kurtosis` - Curtosis de la distribución radial
 
 ### Spatial Analysis (2 features)
-18. `entropy_spatial` - Entropía espacial 3D
-19. `ms_bandwidth` - Bandwidth de Mean Shift clustering
+
+26. `entropy_spatial` - Entropía espacial 3D
+27. `ms_bandwidth` - Bandwidth de Mean Shift clustering
+
+## Diferencias con el Extractor del Usuario
+
+El código de extracción del usuario (`extractor_final_optimizado.py`) calcula **20 features** (19 + n_vacancies):
+
+**Features del usuario (19 sin target):**
+- ✅ Las 11 primeras coinciden (occupancy + gradients + surface + entropy)
+- ❌ **NO incluye** grid_com_x/y/z (centro de masa)
+- ❌ **NO incluye** grid_skewness_x/y/z (asimetría)
+- ✅ Incluye grid_moi_1/2/3
+- ❌ **Solo incluye** moi_principal_3 (no 1 y 2)
+- ✅ Incluye rdf_mean, rdf_kurtosis
+- ✅ Incluye entropy_spatial, ms_bandwidth
+
+**Features del modelo legacy (27):**
+- ✅ Las 11 primeras (occupancy + gradients + surface + entropy)
+- ✅ **INCLUYE** grid_com_x/y/z (centro de masa)
+- ✅ **INCLUYE** grid_skewness_x/y/z (asimetría)
+- ✅ Incluye grid_moi_1/2/3
+- ✅ **INCLUYE** moi_principal_1/2/3 (los tres)
+- ✅ Incluye rdf_mean, rdf_kurtosis
+- ✅ Incluye entropy_spatial, ms_bandwidth
+
+**Conclusión:** El modelo del usuario fue entrenado con un **extractor diferente** (versión legacy) que incluía más features geométricas (centro de masa, asimetría, y los 3 momentos principales).
 
 ## Configuración Importante
 
 En `opentopologyc/config/extractor_config.py`:
 
 ```python
-compute_hull_features: bool = False  # DESACTIVADO: hull features no son compatibles con modelos legacy
+compute_hull_features: bool = False  # DESACTIVADO: no compatible con modelo legacy
 ```
 
-**Importante:** Las `hull_features` (volumen, área, simplices) están desactivadas por defecto para mantener compatibilidad con modelos entrenados con las 19 features base. Si tu modelo fue entrenado CON hull_features, debes cambiar este flag a `True`.
+Las `hull_features` están desactivadas porque el modelo legacy no fue entrenado con ellas.
 
-## Compatibilidad con Código de Entrenamiento
+## Compatibilidad con Modelos
 
-El pipeline de predicción ahora es **100% compatible** con el extractor de entrenamiento que usa:
+### ✅ Modelo Legacy (actual del usuario)
+- Requiere: **27 features base**
+- Incluye: grid_com, grid_skewness, 3 moi_principal
+- Sin hull_features
+- **Compatible ahora** ✅
 
-```python
-# extractor_final_optimizado.py
-FINAL_FEATURES = [
-    'occupancy_total',
-    'occupancy_fraction',
-    'occupancy_x_mean',
-    'occupancy_y_mean',
-    'occupancy_z_mean',
-    'occupancy_gradient_x',
-    'occupancy_gradient_y',
-    'occupancy_gradient_z',
-    'occupancy_gradient_total',
-    'occupancy_surface',
-    'grid_entropy',
-    'grid_moi_1',
-    'grid_moi_2',
-    'grid_moi_3',
-    'moi_principal_3',
-    'rdf_mean',
-    'rdf_kurtosis',
-    'entropy_spatial',
-    'ms_bandwidth',
-    'n_vacancies'  # target
-]
+### ⚠️ Modelo con Extractor Simple (19 features)
+- Requiere: **19 features base**
+- No incluye: grid_com, grid_skewness, solo moi_principal_3
+- Sin hull_features
+- **NO compatible** con código actual (demasiadas features)
+
+### Solución para Compatibilidad
+Si necesitas entrenar un modelo nuevo que coincida con tu `extractor_final_optimizado.py`, debes:
+
+1. **Opción A:** Actualizar tu extractor para incluir las 27 features (recomendado)
+2. **Opción B:** Crear una versión del `FeatureExtractor` que solo extraiga 19 features
+3. **Opción C:** Agregar un parámetro en la config para elegir entre "legacy" (27) o "simple" (19)
+
+## Verificación
+
+Para verificar que las features se extraen correctamente:
+
+```bash
+python test_feature_extraction.py
 ```
 
-## Testing
-
-Se creó `test_feature_extraction.py` para verificar:
-- ✅ Cantidad exacta de features (19)
+Este script verifica:
+- ✅ Cantidad exacta de features (27)
 - ✅ Orden correcto de features
 - ✅ Sin features adicionales no deseadas
 - ✅ Tipos de datos numéricos válidos
 
-## Notas Adicionales
-
-### Normalización
-- Ya no se usa `PositionNormalizer` de forma externa
-- La normalización se hace internamente en `extract_all_features()`
-- Garantiza consistencia con el pipeline de entrenamiento
-
-### Validación
-- El método `_predict_features()` sigue filtrando columnas prohibidas:
-  - `n_vacancies`, `n_atoms_surface`, `vacancies`, `file`, `num_atoms_real`, `num_points`
-- Esto asegura que solo las 19 features lleguen al modelo
-
 ## Conclusión
 
-✅ El sistema de predicción ahora extrae **exactamente las mismas features** que se usaron durante el entrenamiento del modelo, garantizando predicciones precisas y compatibilidad total.
+✅ El sistema de predicción ahora extrae las **27 features** que el modelo legacy espera, incluyendo:
+- Centro de masa del grid (grid_com_x/y/z)
+- Asimetría del grid (grid_skewness_x/y/z)
+- Los 3 momentos principales de inercia (moi_principal_1/2/3)
+
+Esto resuelve el error de incompatibilidad y permite predicciones correctas con el modelo actual.

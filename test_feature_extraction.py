@@ -19,26 +19,46 @@ sys.path.insert(0, str(Path(__file__).parent))
 from opentopologyc.config.extractor_config import ExtractorConfig
 from opentopologyc.core.feature_extractor import FeatureExtractor
 
-# Features esperadas del modelo entrenado (19 features base)
+# Features esperadas del modelo legacy (27 features base)
 EXPECTED_FEATURES = [
+    # Occupancy básicas (2)
     'occupancy_total',
     'occupancy_fraction',
+    # Occupancy por eje (3)
     'occupancy_x_mean',
     'occupancy_y_mean',
     'occupancy_z_mean',
+    # Gradientes (4)
     'occupancy_gradient_x',
     'occupancy_gradient_y',
     'occupancy_gradient_z',
     'occupancy_gradient_total',
+    # Superficie (1)
     'occupancy_surface',
+    # Entropía del grid (1)
     'grid_entropy',
+    # Centro de masa del grid (3)
+    'grid_com_x',
+    'grid_com_y',
+    'grid_com_z',
+    # Skewness del grid (3)
+    'grid_skewness_x',
+    'grid_skewness_y',
+    'grid_skewness_z',
+    # Momentos de inercia del grid (3)
     'grid_moi_1',
     'grid_moi_2',
     'grid_moi_3',
+    # Momentos principales (3)
+    'moi_principal_1',
+    'moi_principal_2',
     'moi_principal_3',
+    # RDF (2)
     'rdf_mean',
     'rdf_kurtosis',
+    # Entropy espacial (1)
     'entropy_spatial',
+    # Bandwidth (1)
     'ms_bandwidth'
 ]
 
@@ -172,8 +192,12 @@ def test_feature_extraction():
     print(f"\n{'='*80}")
     print("✅ VERIFICACIÓN EXITOSA")
     print("="*80)
-    print("\nLa extracción de features es compatible con el modelo entrenado:")
-    print(f"  • 19 features base en el orden correcto")
+    print("\nLa extracción de features es compatible con el modelo legacy:")
+    print(f"  • 27 features base en el orden correcto")
+    print(f"  • 20 grid features (occupancy, gradients, COM, skewness, MOI)")
+    print(f"  • 3 momentos principales de inercia")
+    print(f"  • 2 RDF features")
+    print(f"  • 2 features espaciales (entropy, bandwidth)")
     print(f"  • Sin features adicionales (num_points, etc.)")
     print(f"  • Sin hull_features (compatibilidad con modelos legacy)")
     print(f"  • Valores numéricos válidos")
