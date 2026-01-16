@@ -304,25 +304,29 @@ class PredictionPipeline:
     # FEATURE EXTRACTION
     # ======================================================
     def _extract_features(self, dump_file):
+        """
+        Extrae features usando el pipeline completo de extract_all_features()
+        para garantizar compatibilidad con el modelo entrenado.
+
+        IMPORTANTE: Usa extract_all_features() en lugar de llamar manualmente
+        a cada método para asegurar que se extraen exactamente las 19 features
+        base en el orden correcto, compatible con el extractor de entrenamiento.
+        """
         raw = self.loader.load(dump_file)
         pos = raw["positions"]
 
-        pos_norm, box_size, _ = self.normalizer.normalize(pos)
+        # Usar el pipeline completo de extract_all_features()
+        # Esto extrae las 19 features base en el orden correcto:
+        # - 14 grid features (occupancy, gradients, entropy, grid_moi)
+        # - 1 MOI principal (moi_principal_3)
+        # - 2 RDF features (rdf_mean, rdf_kurtosis)
+        # - 1 entropy espacial
+        # - 1 bandwidth
+        feats = self.features_extractor.extract_all_features(
+            positions=pos,
+            n_vacancies=None  # No incluir target en predicción
+        )
 
-        feats = {}
-
-        if self.config.compute_grid_features:
-            feats.update(self.features_extractor.grid_features(pos_norm, box_size))
-        if self.config.compute_inertia_features:
-            feats.update(self.features_extractor.inertia_feature(pos))
-        if self.config.compute_radial_features:
-            feats.update(self.features_extractor.radial_features(pos))
-        if self.config.compute_entropy_features:
-            feats.update(self.features_extractor.entropy_spatial(pos_norm))
-        if self.config.compute_clustering_features:
-            feats.update(self.features_extractor.bandwidth(pos_norm))
-
-        feats["num_points"] = pos.shape[0]
         return feats
 
     # ======================================================
